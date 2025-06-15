@@ -1,36 +1,199 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Marine Trader - Investments and Wallets Tracker
 
-## Getting Started
+![Application Screenshot](public/icons/logofullinverted.png)
 
-First, run the development server:
+## Project Overview
 
-```bash
+The Marine Trader Investments and Wallets Tracker is a React/Next.js web application designed to help members consolidate and manage their various investments and wallets.
+
+## Key Features
+
+### Multi-tab Interface
+- 📊 Overview dashboard with key metrics
+- 💰 Wallet management
+- 📈 Investment tracking
+- 🕒 Transaction history
+
+### Member-based Filtering
+- 👥 View data for selected members
+- 🧮 Consolidated totals per member
+
+### Data Management
+- ➕ Create wallets, investments, and transactions
+- ✏️ Edit existing records
+- 🗑️ Delete entries with confirmation
+- ✅ Complete pending payments
+
+### Data Visualization
+- 📉 PnL over time charts
+- 🎨 Color-coded wallet/investment cards
+
+## File Structure
+marine-trader/
+├── app/
+│ └── marineTraderTracker.jsx # Main application component
+├── components/
+│ └── Navbar.tsx # Navigation bar with auth
+├── lib/
+│ ├── firebaseConfig.js # Firebase configuration
+│ └── Modals.jsx # All modal components
+├── pages/
+│ └── api/
+│ └── transactions.js # Google Sheets API integration
+├── public/
+│ └── icons/ # Application assets
+├── util/
+│ ├── Constants.jsx # Application constants
+│ └── Helpers.jsx # Utility functions
+└── package.json # Project dependencies
+
+text
+
+## Technical Stack
+
+### Frontend
+- **Framework**: Next.js 14 with React 18
+- **Styling**: Tailwind CSS 3.3
+- **Charts**: Recharts 2.8
+- **Icons**: Lucide React 0.2
+
+### Backend
+- **Authentication**: Firebase Google OAuth
+- **Database**: Firebase Firestore
+- **Integration**: Google Sheets API
+
+## Data Models
+
+### Wallet
+```typescript
+{
+  id: string;
+  name: string;
+  type: 'GCash' | 'Crypto' | 'On-hand' | 'Bank';
+  balance: number;
+  memberInCharge: string;
+}
+Investment
+typescript
+{
+  id: string;
+  name: string;
+  memberInCharge: string;
+  pnl: number;
+  value: number;
+}
+Transaction
+typescript
+{
+  id: string;
+  wallet: string;
+  investment?: string;
+  amount: number;
+  type: 'inbound' | 'outbound';
+  category: string;
+  date: string;
+  member: string;
+  payee?: string;
+}
+Setup Instructions
+Environment Setup
+
+bash
+# Create .env.local file
+GOOGLE_CREDENTIALS=your_credentials_json
+SPREADSHEET_ID=your_sheet_id
+FIREBASE_CONFIG=your_firebase_config
+Install Dependencies
+
+bash
+npm install
+Development
+
+bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+Production Build
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+bash
+npm run build
+npm start
+API Endpoints
+Endpoint	Method	Description
+/api/transactions	POST	Sync with Google Sheets
+Component Documentation
+Main Application (marineTraderTracker.jsx)
+Manages all application state
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+Handles data persistence
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Implements all core features
 
-## Learn More
+Navbar (Navbar.tsx)
+typescript
+interface NavbarProps {
+  user: User | null;
+  onLogin: () => void;
+  onLogout: () => void;
+}
+Modals (Modals.jsx)
+Modal	Purpose
+AddWalletModal	Create new wallets
+EditWalletModal	Modify wallet details
+AddTransactionModal	Record financial transactions
+ConfirmationModal	Confirm destructive actions
+Error Handling
+The application includes:
 
-To learn more about Next.js, take a look at the following resources:
+🛡️ Input validation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+🔄 Automatic retry for sync operations
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+📝 Detailed error logging
 
-## Deploy on Vercel
+💬 User-friendly error messages
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Security
+🔒 Google OAuth authentication
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+🔐 Firebase security rules
+
+🛡️ Environment variable protection
+
+🧹 Local storage sanitization
+
+Performance
+⚡ Memoized calculations
+
+📑 Paginated transaction history
+
+🔄 Optimistic UI updates
+
+🗃️ Efficient data fetching
+
+Future Roadmap
+🚀 Real-time updates with Firebase
+
+📱 Enhanced mobile experience
+
+📤 Data export functionality
+
+🔍 Advanced filtering options
+
+Troubleshooting
+Issue	Solution
+Sync failures	Check API quotas & permissions
+Auth problems	Verify Firebase config
+Data mismatch	Force sync and check logs
+License
+This project is proprietary software developed for Marine Trader.
+
+text
+
+This Markdown document provides:
+- Clean, organized structure
+- Proper code formatting
+- Easy-to-read tables
+- Clear section headings
+- Visual emoji indicators
+- Comprehensive technical details
+
+You can copy this directly into your `README.md` file and it will render beautifully on GitHub or any other Markdown viewer. The documentation covers all aspects from setup to architecture to future plans.

@@ -1,14 +1,21 @@
 'use client'
 
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Check, Plus, Search, Filter, Edit, Trash2, TrendingUp, Wallet, Building2, History } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { AddInvestmentModal, AddTransactionModal, AddWalletModal, CompletePaymentModal, EditWalletModal, EditInvestmentModal, ConfirmationModal
- } from '../lib/Modals';
+import { 
+  AddInvestmentModal, 
+  AddTransactionModal, 
+  AddWalletModal, 
+  CompletePaymentModal, 
+  EditWalletModal, 
+  EditInvestmentModal, 
+  ConfirmationModal 
+} from '../lib/Modals';
 import { formatDate, getTypeIcon } from "../util/Helpers";
 import { memberColors, members } from "../util/Constants";
 
-// Firestore-like data structure helpers
+// Custom hook for localStorage persistence
 const useLocalStorage = (key, initialValue) => {
   const [storedValue, setStoredValue] = useState(() => {
     try {
@@ -23,10 +30,7 @@ const useLocalStorage = (key, initialValue) => {
     }
   });
 
-
-
-
-  const setValue = (value) => {
+  const setValue = useCallback((value) => {
     try {
       const valueToStore = value instanceof Function ? value(storedValue) : value;
       setStoredValue(valueToStore);
@@ -36,151 +40,27 @@ const useLocalStorage = (key, initialValue) => {
     } catch (error) {
       console.error(error);
     }
-  };
+  }, [storedValue, key]);
 
   return [storedValue, setValue];
 };
 
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-const MarineTraderTracker = () => {
+// Initial data states
+const initialWallets = [
+  { id: generateId(), name: 'GCash Main', type: 'GCash', balance: 45000, memberInCharge: 'Kyle Yuan Uy' },
+  { id: generateId(), name: 'BTC Wallet', type: 'Crypto', balance: 80000, memberInCharge: 'Louis Uy' },
+  { id: generateId(), name: 'Cash Reserve', type: 'On-hand', balance: 25000, memberInCharge: 'Fritz Gioranz Tayo' },
+];
 
-  // State with localStorage persistence
-  const [wallets, setWallets] = useLocalStorage('wallets', [
-    { id: generateId(), name: 'GCash Main', type: 'GCash', balance: 45000, memberInCharge: 'Kyle Yuan Uy' },
-    { id: generateId(), name: 'BTC Wallet', type: 'Crypto', balance: 80000, memberInCharge: 'Louis Uy' },
-    { id: generateId(), name: 'Cash Reserve', type: 'On-hand', balance: 25000, memberInCharge: 'Fritz Gioranz Tayo' },
-  ]);
+const initialInvestments = [
+  { id: generateId(), name: 'Tech Startup A', memberInCharge: 'Kyle Yuan Uy', pnl: 15000, value: 75000 },
+  { id: generateId(), name: 'Forex Trading', memberInCharge: 'Louis Uy', pnl: -2500, value: 32500 },
+  { id: generateId(), name: 'Real Estate', memberInCharge: 'Fritz Gioranz Tayo', pnl: 28000, value: 128000 }
+];
 
-  // Add to your MarineTraderTracker component
-const [lastSyncTime, setLastSyncTime] = useLocalStorage('lastSyncTime', null);
-const [isSyncing, setIsSyncing] = useState(false);
-
-const syncWithSheets = async (action = 'sync', data = null) => {
-  try {
-    setIsSyncing(true);
-    console.log(`Syncing ${action} action using data: \n${data}`);
-    
-    // Validate data before proceeding
-    if (action === 'delete') {
-      console.log('Delete action data:', data);
-      
-      // Validate delete data structure
-      if (!data || !data.id) {
-        const errorMsg = 'Missing Transaction ID for deletion';
-        console.error(errorMsg, 'Data received:', data);
-        throw new Error(errorMsg);
-      }
-      
-      return await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, id: data.id })
-      });
-    }
-
-    if (action !== 'sync' && !data?.id) {
-      throw new Error(`Invalid data for ${action} action`);
-    }
-
-    // Create a clean payload with proper null checks
-    const payload = {
-      action,
-      [action === 'sync' ? 'transactions' : 'transaction']: 
-        action === 'sync' 
-          ? transactions
-              .filter(t => t?.id) // Filter out any null/undefined transactions
-              .map(t => ({
-                id: t.id,
-                date: t.date || new Date().toISOString().slice(0, 10),
-                wallet: t.wallet || '',
-                article: t.article || '',
-                amount: t.amount || 0,
-                type: t.type || 'inbound',
-                category: t.category || '',
-                member: t.member || '',
-                payee: t.payee || '',
-                lastmodified: t.lastmodified || new Date().toISOString()
-              }))
-          : {
-              id: data.id,
-              date: data.date || new Date().toISOString().slice(0, 10),
-              wallet: data.wallet || '',
-              article: data.article || '',
-              amount: data.amount || 0,
-              type: data.type || 'inbound',
-              category: data.category || '',
-              member: data.member || '',
-              payee: data.payee || '',
-              lastmodified: data.lastmodified || new Date().toISOString()
-            }
-    };
-
-    const response = await fetch('/api/transactions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.error || `Sync failed with status ${response.status}`
-      );
-    }
-    
-    if (action === 'sync') {
-      const mergedTransactions = await response.json();
-      setTransactions(mergedTransactions);
-    }
-    
-    setLastSyncTime(new Date().toISOString());
-    return true;
-  } catch (error) {
-    console.error('Sync error:', error.message);
-    alert(`Sync failed: ${error.message}`);
-    return false;
-  } finally {
-    setIsSyncing(false);
-  }
-};
-
-useEffect(() => {
-  // Initial sync - explicitly specify 'sync' action
-  syncWithSheets('sync');
-  
-  // Sync every 5 minutes
-  const interval = setInterval(() => syncWithSheets('sync'), 5 * 60 * 1000);
-  
-  return () => clearInterval(interval);
-}, []);
-
-  // Add these functions
-  const handleUpdateWallet = (updatedWallet) => {
-    setWallets(wallets.map(w => 
-      w.id === updatedWallet.id ? updatedWallet : w
-    ));
-  };
-
-  const handleDeleteWallet = (id) => {
-    setWallets(wallets.filter(wallet => wallet.id !== id));
-  };
-  
-
-  const handleUpdateInvestment = (updatedInvestment) => {
-    setInvestments(investments.map(i => 
-      i.id === updatedInvestment.id ? updatedInvestment : i
-    ));
-  };
-
-
-  const [investments, setInvestments] = useLocalStorage('investments', [
-    { id: generateId(), name: 'Tech Startup A', memberInCharge: 'Kyle Yuan Uy', pnl: 15000, value: 75000 },
-    { id: generateId(), name: 'Forex Trading', memberInCharge: 'Louis Uy', pnl: -2500, value: 32500 },
-    { id: generateId(), name: 'Real Estate', memberInCharge: 'Fritz Gioranz Tayo', pnl: 28000, value: 128000 }
-  ]);
-
-  const [transactions, setTransactions] = useLocalStorage('transactions', [
+const initialTransactions =[
     { 
       id: generateId(), 
       wallet: 'GCash Main', 
@@ -225,9 +105,9 @@ useEffect(() => {
       member: 'Kyle Yuan Uy',
       payee: 'Supplier Co.' 
     }
-  ]);
+  ];
 
-  const [pendingPayments, setPendingPayments] = useLocalStorage('pendingPayments', [
+const initialPendingPayments = [
     { 
       id: generateId(), 
       payee: 'Supplier Co.', 
@@ -255,34 +135,46 @@ useEffect(() => {
       wallet: 'Cash Reserve',
       status: 'pending' 
     }
-  ]);
+  ]
+
+
+const MarineTraderTracker = () => {
+
+  // State with localStorage persistence
+  const [wallets, setWallets] = useLocalStorage('wallets', initialWallets);
+  const [investments, setInvestments] = useLocalStorage('investments', initialInvestments);
+  const [transactions, setTransactions] = useLocalStorage('transactions', initialTransactions);
+  const [pendingPayments, setPendingPayments] = useLocalStorage('pendingPayments', initialPendingPayments);
+  const [lastSyncTime, setLastSyncTime] = useLocalStorage('lastSyncTime', null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // UI state
   const [activeTab, setActiveTab] = useState('overview');
   const [selectedMembers, setSelectedMembers] = useState(['Kyle Yuan Uy']);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  
+  // Modal states
   const [showAddWalletModal, setShowAddWalletModal] = useState(false);
   const [showAddInvestmentModal, setShowAddInvestmentModal] = useState(false);
   const [showAddTransactionModal, setShowAddTransactionModal] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [editingTransaction, setEditingTransaction] = useState(null);
   const [showCompletePaymentModal, setShowCompletePaymentModal] = useState(false);
-  const [completingPayment, setCompletingPayment] = useState(null);
-  const [paymentCompletionDate, setPaymentCompletionDate] = useState(new Date().toISOString().slice(0, 16));
-  // Add these state variables
-  const [editingWallet, setEditingWallet] = useState(null);
   const [showEditWalletModal, setShowEditWalletModal] = useState(false);
   const [showDeleteWalletModal, setShowDeleteWalletModal] = useState(false);
-  const [walletToDelete, setWalletToDelete] = useState(null);
-  // Add this with your other state declarations
   const [showDeleteInvestmentModal, setShowDeleteInvestmentModal] = useState(false);
-  const [transactionToDelete, setTransactionToDelete] = useState(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   
+  // Editing states
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [editingWallet, setEditingWallet] = useState(null);
+  const [editingInvestment, setEditingInvestment] = useState(null);
+  const [completingPayment, setCompletingPayment] = useState(null);
+  const [walletToDelete, setWalletToDelete] = useState(null);
+  const [investmentToDelete, setInvestmentToDelete] = useState(null);
+  const [transactionToDelete, setTransactionToDelete] = useState(null);
+  const [paymentCompletionDate, setPaymentCompletionDate] = useState(new Date().toISOString().slice(0, 16));
 
-
-
-  // Form states for modals
+  // Form states
   const [newWallet, setNewWallet] = useState({
     name: '',
     type: '',
@@ -310,39 +202,106 @@ useEffect(() => {
   });
 
   // Mock PnL over time data
-  const pnlData = [
+  const pnlData = useMemo(() => [
     { date: 'Jan', pnl: 5000 },
     { date: 'Feb', pnl: 12000 },
     { date: 'Mar', pnl: 8000 },
     { date: 'Apr', pnl: 18000 },
     { date: 'May', pnl: 22000 },
     { date: 'Jun', pnl: 40500 }
-  ];
+  ], []);
 
-  const walletTypeColors = {
+  const walletTypeColors = useMemo(() => ({
     'GCash': 'bg-blue-500',
     'Crypto': 'bg-yellow-500',
     'On-hand': 'bg-green-500',
     'Bank': 'bg-red-500'
-  };
+  }), []);
 
-  const handleMemberToggle = (memberName) => {
-    if (selectedMembers.includes(memberName)) {
-      const newSelected = selectedMembers.filter(m => m !== memberName);
-      setSelectedMembers(newSelected.length === 0 ? members.map(m => m.name) : newSelected);
-    } else {
-      setSelectedMembers([...selectedMembers, memberName]);
+// Data synchronization
+  const syncWithSheets = useCallback(async (action = 'sync', data = null) => {
+    try {
+      setIsSyncing(true);
+      
+      if (action === 'delete' && (!data || !data.id)) {
+        throw new Error('Missing Transaction ID for deletion');
+      }
+
+      if (action !== 'sync' && !data?.id) {
+        throw new Error(`Invalid data for ${action} action`);
+      }
+
+      const payload = {
+        action,
+        [action === 'sync' ? 'transactions' : 'transaction']: 
+          action === 'sync' 
+            ? transactions
+                .filter(t => t?.id)
+                .map(t => ({
+                  id: t.id,
+                  date: t.date || new Date().toISOString().slice(0, 10),
+                  wallet: t.wallet || '',
+                  article: t.article || '',
+                  amount: t.amount || 0,
+                  type: t.type || 'inbound',
+                  category: t.category || '',
+                  member: t.member || '',
+                  payee: t.payee || '',
+                  lastmodified: t.lastmodified || new Date().toISOString()
+                }))
+            : {
+                id: data.id,
+                date: data.date || new Date().toISOString().slice(0, 10),
+                wallet: data.wallet || '',
+                article: data.article || '',
+                amount: data.amount || 0,
+                type: data.type || 'inbound',
+                category: data.category || '',
+                member: data.member || '',
+                payee: data.payee || '',
+                lastmodified: data.lastmodified || new Date().toISOString()
+              }
+      };
+
+      const response = await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Sync failed with status ${response.status}`);
+      }
+      
+      if (action === 'sync') {
+        const mergedTransactions = await response.json();
+        setTransactions(mergedTransactions);
+      }
+      
+      setLastSyncTime(new Date().toISOString());
+      return true;
+    } catch (error) {
+      console.error('Sync error:', error.message);
+      alert(`Sync failed: ${error.message}`);
+      return false;
+    } finally {
+      setIsSyncing(false);
     }
-  };
+  }, [transactions, setTransactions]);
 
+  useEffect(() => {
+  // Initial sync
+  syncWithSheets('sync');
+  // Sync every 30 minutes
+  const interval = setInterval(() => syncWithSheets('sync'), 30 * 60 * 1000);
+  return () => clearInterval(interval);
+}, []); // Empty dependency array means this runs only once on mount
+
+  // Data filtering
   const filteredData = useMemo(() => {
     if (selectedMembers.length === members.length) {
-      return { 
-        wallets, 
-        investments, 
-        transactions, 
-        pendingPayments 
-      };
+      return { wallets, investments, transactions, pendingPayments };
     }
     
     return {
@@ -353,7 +312,7 @@ useEffect(() => {
     };
   }, [wallets, investments, transactions, pendingPayments, selectedMembers, members.length]);
 
-  // Then calculate totals based on filteredData
+  // Totals calculation
   const totalBalance = useMemo(() => (
     filteredData.wallets.reduce((sum, wallet) => sum + wallet.balance, 0)
   ), [filteredData.wallets]);
@@ -362,14 +321,27 @@ useEffect(() => {
     filteredData.investments.reduce((sum, investment) => sum + investment.pnl, 0)
   ), [filteredData.investments]);
 
-  // Wallet CRUD operations
-  const addWallet = () => {
+
+  // Member toggle handler
+  const handleMemberToggle = useCallback((memberName) => {
+    setSelectedMembers(prev => {
+      if (prev.includes(memberName)) {
+        const newSelected = prev.filter(m => m !== memberName);
+        return newSelected.length === 0 ? members.map(m => m.name) : newSelected;
+      } else {
+        return [...prev, memberName];
+      }
+    });
+  }, [members]);
+
+  // CRUD operations
+  const addWallet = useCallback(() => {
     const wallet = {
       id: generateId(),
       ...newWallet,
       balance: Number(newWallet.balance)
     };
-    setWallets([...wallets, wallet]);
+    setWallets(prev => [...prev, wallet]);
     setNewWallet({
       name: '',
       type: '',
@@ -377,17 +349,16 @@ useEffect(() => {
       balance: 0
     });
     setShowAddWalletModal(false);
-  };
+  }, [newWallet, setWallets]);
 
-  // Investment CRUD operations
-  const addInvestment = () => {
+  const addInvestment = useCallback(() => {
     const investment = {
       id: generateId(),
       ...newInvestment,
       value: Number(newInvestment.value),
       pnl: Number(newInvestment.pnl)
     };
-    setInvestments([...investments, investment]);
+    setInvestments(prev => [...prev, investment]);
     setNewInvestment({
       name: '',
       memberInCharge: '',
@@ -395,128 +366,115 @@ useEffect(() => {
       pnl: 0
     });
     setShowAddInvestmentModal(false);
-  };
+  }, [newInvestment, setInvestments]);
 
-  // Transaction CRUD operations
-const addNewTransaction = async (transaction) => {
-  // Optimistic update
-  setTransactions([...transactions, transaction]);
-  
-  try {
-    // Sync to Google Sheets
-    const success = await syncWithSheets('create', transaction);
-    
-    if (!success) {
-      // Rollback on error
-      setTransactions(transactions);
-      alert('Failed to sync transaction with Google Sheets');
+  const addNewTransaction = useCallback(async (transaction) => {
+    setTransactions(prev => [...prev, transaction]);
+    try {
+      const success = await syncWithSheets('create', transaction);
+      if (!success) {
+        setTransactions(prev => prev.filter(t => t.id !== transaction.id));
+        alert('Failed to sync transaction with Google Sheets');
+      }
+    } catch (error) {
+      console.error('Transaction creation failed:', error);
+      setTransactions(prev => prev.filter(t => t.id !== transaction.id));
+      alert('Failed to create transaction. Please try again.');
     }
-  } catch (error) {
-    console.error('Transaction creation failed:', error);
-    setTransactions(transactions);
-    alert('Failed to create transaction. Please try again.');
-  }
-};
+  }, [setTransactions, syncWithSheets]);
 
-// Update Transaction
-const updateTransaction = async (updatedData) => {
-  const updatedTransaction = {
-    ...updatedData,
-    amount: Number(updatedData.amount),
-    lastmodified: new Date().toISOString()
-  };
-  
-  // Optimistic update
-  setTransactions(transactions.map(t => 
-    t.id === updatedTransaction.id ? updatedTransaction : t
-  ));
-  
-  try {
-    // Sync to Google Sheets
-    const success = await syncWithSheets('update', updatedTransaction);
+  const updateTransaction = useCallback(async (updatedData) => {
+    const updatedTransaction = {
+      ...updatedData,
+      amount: Number(updatedData.amount),
+      lastmodified: new Date().toISOString()
+    };
     
-    if (!success) {
-      // Rollback on error
-      setTransactions(transactions);
-      alert('Failed to sync updates with Google Sheets');
-    } else {
-      setEditingTransaction(null);
-      setShowAddTransactionModal(false);
-    }
-  } catch (error) {
-    console.error('Transaction update failed:', error);
-    setTransactions(transactions);
-  }
-};
-
-const logTransactionDelete = (transactionId, location) => {
-    console.log(`[Delete Transaction] ID: ${transactionId}, Location: ${location}`);
-    console.log(`Transaction Object:`, 
-      transactions.find(t => t.id === transactionId) || 'Not found'
-    );
-  };
-  
-// Update deleteTransaction function
-  const deleteTransaction = async (transactionId) => {
-    if (!transactionId) {
-      console.error('No transaction ID provided for deletion');
-      alert('No transaction ID provided for deletion');
-      return;
-    }
-
-    // Log before deletion
-    logTransactionDelete(transactionId, 'Before optimistic update');
-    
-    // Optimistic update
-    const originalTransactions = [...transactions];
-    setTransactions(transactions.filter(t => t.id !== transactionId));
+    setTransactions(prev => prev.map(t => 
+      t.id === updatedTransaction.id ? updatedTransaction : t
+    ));
     
     try {
-      // Log before API call
-      console.log('Attempting to delete transaction:', transactionId);
-      
-      // Sync to Google Sheets - pass minimal required data
-      await syncWithSheets('delete', { id: transactionId });
-      
-      // Log success
-      console.log('Successfully deleted transaction:', transactionId);
+      const success = await syncWithSheets('update', updatedTransaction);
+      if (!success) {
+        setTransactions(prev => prev.map(t => 
+          t.id === updatedTransaction.id ? updatedData : t
+        ));
+        alert('Failed to sync updates with Google Sheets');
+      } else {
+        setEditingTransaction(null);
+        setShowAddTransactionModal(false);
+      }
     } catch (error) {
-      console.error('Failed to delete transaction:', error);
-      
-      // Rollback on error
-      setTransactions(originalTransactions);
-      alert(`Failed to delete transaction: ${error.message}`);
+      console.error('Transaction update failed:', error);
+      setTransactions(prev => prev.map(t => 
+        t.id === updatedTransaction.id ? updatedData : t
+      ));
     }
-  };
+  }, [setTransactions, syncWithSheets]);
 
-  // Update the confirmDelete function
-  const confirmDelete = (transaction) => {
-    if (!transaction || !transaction.id) {
-      console.error('Invalid transaction object in confirmDelete:', transaction);
-      alert('Invalid transaction data');
-      return;
-    }
-    
-    logTransactionDelete(transaction.id, 'Confirmation modal');
-    setTransactionToDelete(transaction);
-    setShowDeleteConfirmation(true);
-  };
+const deleteTransaction = useCallback(async (transactionId) => {
+  if (!transactionId) {
+    console.error('No transaction ID provided for deletion');
+    alert('No transaction ID provided for deletion');
+    return;
+  }
 
-  // Payment operations
-  const handlePaymentComplete = (payment) => {
+  const originalTransactions = [...transactions];
+  setTransactions(prev => prev.filter(t => t.id !== transactionId));
+  
+  try {
+    // Now using the same payload structure as other actions
+    await syncWithSheets('delete', { 
+      id: transactionId,
+      // Include minimal required fields (date is required for merge logic)
+      date: new Date().toISOString().slice(0, 10),
+      wallet: '',
+      amount: 0,
+      type: 'inbound',
+      category: '',
+      member: '',
+      payee: ''
+    });
+  } catch (error) {
+    console.error('Failed to delete transaction:', error);
+    setTransactions(originalTransactions);
+    alert(`Failed to delete transaction: ${error.message}`);
+  }
+}, [transactions, setTransactions, syncWithSheets]);
+
+  const handleUpdateWallet = useCallback((updatedWallet) => {
+    setWallets(prev => prev.map(w => 
+      w.id === updatedWallet.id ? updatedWallet : w
+    ));
+  }, [setWallets]);
+
+  const handleDeleteWallet = useCallback((id) => {
+    setWallets(prev => prev.filter(wallet => wallet.id !== id));
+  }, [setWallets]);
+
+  const handleUpdateInvestment = useCallback((updatedInvestment) => {
+    setInvestments(prev => prev.map(i => 
+      i.id === updatedInvestment.id ? updatedInvestment : i
+    ));
+  }, [setInvestments]);
+
+  const handleDeleteInvestment = useCallback((id) => {
+    setInvestments(prev => prev.filter(investment => investment.id !== id));
+  }, [setInvestments]);
+
+  const handlePaymentComplete = useCallback((payment) => {
     setCompletingPayment(payment);
     setPaymentCompletionDate(new Date().toISOString().slice(0, 16));
     setShowCompletePaymentModal(true);
-  };
+  }, []);
 
-  const completePayment = () => {
-    // Update payment status
+  const completePayment = useCallback(() => {
     const updatedPayments = pendingPayments.map(p => 
       p.id === completingPayment.id ? { ...p, status: 'completed' } : p
     );
     setPendingPayments(updatedPayments);
     
-    // Add transaction
     const newTransaction = {
       id: generateId(),
       wallet: completingPayment.wallet,
@@ -529,110 +487,127 @@ const logTransactionDelete = (transactionId, location) => {
       payee: completingPayment.payee
     };
     
-    setTransactions([...transactions, newTransaction]);
+    setTransactions(prev => [...prev, newTransaction]);
     setShowCompletePaymentModal(false);
-  };
+  }, [completingPayment, pendingPayments, paymentCompletionDate, setPendingPayments, setTransactions]);
 
-  const handlePaymentDelete = (paymentId) => {
-    setPendingPayments(pendingPayments.filter(payment => payment.id !== paymentId));
-  };
+  const handlePaymentDelete = useCallback((paymentId) => {
+    setPendingPayments(prev => prev.filter(payment => payment.id !== paymentId));
+  }, [setPendingPayments]);
 
-  
+  const confirmDelete = useCallback((transaction) => {
+    setTransactionToDelete(transaction);
+    setShowDeleteConfirmation(true);
+  }, []);
 
-  const renderOverview = () => (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg text-black font-semibold mb-2">Total Balance</h3>
-          <p className="text-3xl font-bold text-green-600">₱{totalBalance.toLocaleString()}</p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg text-black font-semibold mb-2">Total P&L</h3>
-          <p className={`text-3xl font-bold ${totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            ₱{totalPnL.toLocaleString()}
-          </p>
-        </div>
-        <div className="bg-white rounded-lg shadow p-6">
-          <h3 className="text-lg text-black font-semibold mb-2">Pending Payments</h3>
-          <p className="text-3xl font-bold text-yellow-600">{filteredData.pendingPayments.filter(p => p.status === 'pending').length}</p>
-        </div>
-      </div>
-      
-      {/* Pending Payments Table */}
-      <div className="bg-white rounded-lg shadow">
-        <div className="p-6 border-b">
-          <h3 className="text-lg text-black font-semibold">Pending Payments</h3>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Payee</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Lender</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Amount</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Due Date</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Wallet</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {filteredData.pendingPayments
-                .filter(payment => payment.status === 'pending')
-                .map(payment => (
-                  <tr key={payment.id}>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.payee}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.lender}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black font-medium">₱{payment.amount.toLocaleString()}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.dueDate}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.wallet}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                      <div className="flex space-x-2">
-                        <button 
-                          onClick={() => handlePaymentComplete(payment)}
-                          className="text-green-600 hover:text-green-800"
-                          title="Mark as completed"
-                        >
-                          <Check size={16} />
-                        </button>
-                        <button 
-                          className="text-blue-600 hover:text-blue-800"
-                          title="Edit payment"
-                        >
-                          <Edit size={16} />
-                        </button>
-                        <button 
-                          onClick={() => handlePaymentDelete(payment.id)}
-                          className="text-red-600 hover:text-red-800"
-                          title="Delete payment"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  const handleDeleteConfirmed = useCallback(async () => {
+    if (transactionToDelete && transactionToDelete.id) {
+      try {
+        await deleteTransaction(transactionToDelete.id); 
+      } catch (error) {
+        console.error('Deletion failed:', error);
+      }
+    }
+    setShowDeleteConfirmation(false);
+    setTransactionToDelete(null);
+  }, [transactionToDelete, deleteTransaction]);
 
-      {/* P&L Chart */}
+
+  const renderOverview = useCallback(() => (
+  <div className="space-y-6">
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
       <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg text-black font-semibold mb-4">P&L Over Time</h3>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={pnlData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="date" />
-            <YAxis />
-            <Tooltip formatter={(value) => [`₱${value.toLocaleString()}`, 'P&L']} />
-            <Line type="monotone" dataKey="pnl" stroke="#10b981" strokeWidth={2} />
-          </LineChart>
-        </ResponsiveContainer>
+        <h3 className="text-lg text-black font-semibold mb-2">Total Balance</h3>
+        <p className="text-3xl font-bold text-green-600">₱{totalBalance.toLocaleString()}</p>
+      </div>
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg text-black font-semibold mb-2">Total P&L</h3>
+        <p className={`text-3xl font-bold ${totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+          ₱{totalPnL.toLocaleString()}
+        </p>
+      </div>
+      <div className="bg-white rounded-lg shadow p-6">
+        <h3 className="text-lg text-black font-semibold mb-2">Pending Payments</h3>
+        <p className="text-3xl font-bold text-yellow-600">{filteredData.pendingPayments.filter(p => p.status === 'pending').length}</p>
       </div>
     </div>
-  );
+    
+    {/* Pending Payments Table */}
+    <div className="bg-white rounded-lg shadow">
+      <div className="p-6 border-b">
+        <h3 className="text-lg text-black font-semibold">Pending Payments</h3>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Payee</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Lender</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Amount</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Due Date</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Wallet</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {filteredData.pendingPayments
+              .filter(payment => payment.status === 'pending')
+              .map(payment => (
+                <tr key={payment.id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.payee}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.lender}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black font-medium">₱{payment.amount.toLocaleString()}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.dueDate}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.wallet}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => handlePaymentComplete(payment)}
+                        className="text-green-600 hover:text-green-800"
+                        title="Mark as completed"
+                      >
+                        <Check size={16} />
+                      </button>
+                      <button 
+                        className="text-blue-600 hover:text-blue-800"
+                        title="Edit payment"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button 
+                        onClick={() => handlePaymentDelete(payment.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Delete payment"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-  const renderWallets = () => (
+    {/* P&L Chart */}
+    <div className="bg-white rounded-lg shadow p-6">
+      <h3 className="text-lg text-black font-semibold mb-4">P&L Over Time</h3>
+      <ResponsiveContainer width="100%" height={300}>
+        <LineChart data={pnlData}>
+          <CartesianGrid strokeDasharray="3 3" />
+          <XAxis dataKey="date" />
+          <YAxis />
+          <Tooltip formatter={(value) => [`₱${value.toLocaleString()}`, 'P&L']} />
+          <Line type="monotone" dataKey="pnl" stroke="#10b981" strokeWidth={2} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  </div>
+), [filteredData.pendingPayments, totalBalance, totalPnL, pnlData, handlePaymentComplete, handlePaymentDelete]);
+
+
+  const renderWallets = useCallback(() => (
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
     {filteredData.wallets.map(wallet => {
       const memberColor = memberColors[wallet.memberInCharge] || 'bg-gray-500';
@@ -687,19 +662,9 @@ const logTransactionDelete = (transactionId, location) => {
       <p className="text-black">Add Wallet</p>
     </div>
   </div>
-);
+), [filteredData.wallets]);
 
-// Add similar functionality for investments
-const [editingInvestment, setEditingInvestment] = useState(null);
-const [showEditInvestmentModal, setShowEditInvestmentModal] = useState(false);
-const [investmentToDelete, setInvestmentToDelete] = useState(null);
-
-
-const handleDeleteInvestment = (id) => {
-  setInvestments(investments.filter(investment => investment.id !== id));
-};
-
-  const renderInvestments = () => (
+  const renderInvestments = useCallback(() => (
   <div className="space-y-6">
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {filteredData.investments.map(investment => {
@@ -797,34 +762,19 @@ const handleDeleteInvestment = (id) => {
       />
     )}
   </div>
-);
+), [filteredData.investments]);
 
-
-
-const handleDeleteConfirmed = async () => {
-  if (transactionToDelete) {
-    console.log('Confirmed deletion of:', transactionToDelete);
-    try {
-      await deleteTransaction(transactionToDelete.id); 
-    } catch (error) {
-      console.error('Deletion failed:', error);
-    }
-  }
-  setShowDeleteConfirmation(false);
-  setTransactionToDelete(null);
-};
-
-  const renderHistory = () => {
-    const filteredTransactions = filteredData.transactions.filter(transaction => {
-      const searchTermLower = searchTerm.toLowerCase();
-      return (
-        (transaction.wallet && transaction.wallet.toLowerCase().includes(searchTermLower)) ||
-        (transaction.investment && transaction.investment.toLowerCase().includes(searchTermLower)) ||
-        (transaction.category && transaction.category.toLowerCase().includes(searchTermLower)) ||
-        (transaction.payee && transaction.payee.toLowerCase().includes(searchTermLower)) ||
-        (transaction.article && transaction.article.toLowerCase().includes(searchTermLower))
-      );
-    });
+  const renderHistory = useCallback(() => {
+  const filteredTransactions = filteredData.transactions.filter(transaction => {
+    const searchTermLower = searchTerm.toLowerCase();
+    return (
+      (transaction.wallet && transaction.wallet.toLowerCase().includes(searchTermLower)) ||
+      (transaction.investment && transaction.investment.toLowerCase().includes(searchTermLower)) ||
+      (transaction.category && transaction.category.toLowerCase().includes(searchTermLower)) ||
+      (transaction.payee && transaction.payee.toLowerCase().includes(searchTermLower)) ||
+      (transaction.article && transaction.article.toLowerCase().includes(searchTermLower))
+    );
+  });
 
   const paginatedTransactions = filteredTransactions.slice((currentPage - 1) * 20, currentPage * 20);
   const totalPages = Math.ceil(filteredTransactions.length / 20);
@@ -950,22 +900,17 @@ const handleDeleteConfirmed = async () => {
       )}
     </div>
   );
-};
+}, [filteredData.transactions, searchTerm, currentPage, setSearchTerm, setShowAddTransactionModal, setEditingTransaction, confirmDelete, formatDate, getTypeIcon]);
 
-  const renderContent = () => {
-    switch (activeTab) {
-      case 'overview':
-        return renderOverview();
-      case 'wallets':
-        return renderWallets();
-      case 'investments':
-        return renderInvestments();
-      case 'history':
-        return renderHistory();
-      default:
-        return renderOverview();
-    }
-  };
+  const renderContent = useCallback(() => {
+  switch (activeTab) {
+    case 'overview': return renderOverview();
+    case 'wallets': return renderWallets();
+    case 'investments': return renderInvestments();
+    case 'history': return renderHistory();
+    default: return renderOverview();
+  }
+}, [activeTab, renderOverview, renderWallets, renderInvestments, renderHistory]);
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -1023,51 +968,55 @@ const handleDeleteConfirmed = async () => {
 
       {/* Modals */}
       {showAddWalletModal && (
-      <AddWalletModal 
+        <AddWalletModal 
           onClose={() => setShowAddWalletModal(false)}
-          onSave={(newWallet) => {
-            setWallets([...wallets, newWallet]);
-          }}
-          members={members} // Pass members as prop
+          onSave={addWallet}
+          members={members}
         />
       )}
 
   {showAddInvestmentModal && (
-    <AddInvestmentModal
-      onClose={() => setShowAddInvestmentModal(false)}
-      onSave={(newInvestment) => {
-        setInvestments([...investments, newInvestment]);
-      }}
-      members={members} // Pass members as prop
-    />
-  )}
+  <AddInvestmentModal
+    onClose={() => setShowAddInvestmentModal(false)}
+    onSave={(newInvestment) => {
+      setInvestments(prev => [...prev, {
+        id: generateId(),
+        ...newInvestment,
+        value: Number(newInvestment.value),
+        pnl: Number(newInvestment.pnl)
+      }]);
+    }}
+    members={members}
+  />
+)}
 
   {showAddTransactionModal && (
-    <AddTransactionModal
-      onClose={() => {
-        setShowAddTransactionModal(false);
-        setEditingTransaction(null);
-      }}
-      onSave={(transactionData) => {
-        if (editingTransaction) {
-          updateTransaction(transactionData);
-        } else {
-          // Create a complete transaction object
-          const newTransaction = {
-            ...transactionData,
-            id: generateId(),
-            amount: Number(transactionData.amount),
-            lastmodified: new Date().toISOString()
-          };
-          addNewTransaction(newTransaction); // We'll create this function
-        }
-      }}
-      wallets={wallets}
-      investments={investments}
-      members={members}
-      transaction={editingTransaction}
-    />
-  )}
+  <AddTransactionModal
+    onClose={() => {
+      setShowAddTransactionModal(false);
+      setEditingTransaction(null);
+    }}
+    onSave={(transactionData) => {
+      if (editingTransaction) {
+        updateTransaction(transactionData);
+      } else {
+        const newTransaction = {
+          ...transactionData,
+          id: generateId(),
+          amount: Number(transactionData.amount),
+          lastmodified: new Date().toISOString()
+        };
+        addNewTransaction(newTransaction);
+      }
+    }}
+    wallets={wallets}
+    investments={investments}
+    members={members}
+    transaction={editingTransaction}
+    onUpdateWallet={handleUpdateWallet}
+    onUpdateInvestment={handleUpdateInvestment} // Add this line
+  />
+)}
 
   {showCompletePaymentModal && (
   <CompletePaymentModal
@@ -1129,20 +1078,20 @@ const handleDeleteConfirmed = async () => {
   />
 )}
 
-<div className="fixed bottom-4 right-4 flex items-center space-x-2">
-  <button 
-    onClick={syncWithSheets}
-    disabled={isSyncing}
-    className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50"
-  >
-    {isSyncing ? 'Syncing...' : 'Sync Data'}
-  </button>
-  {lastSyncTime && (
-    <span className="text-sm text-gray-500">
-      Last synced: {formatDate(lastSyncTime)}
-    </span>
-  )}
-</div>
+      <div className="fixed bottom-4 right-4 flex items-center space-x-2">
+        <button 
+          onClick={syncWithSheets}
+          disabled={isSyncing}
+          className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50"
+        >
+          {isSyncing ? 'Syncing...' : 'Sync Data'}
+        </button>
+        {lastSyncTime && (
+          <span className="text-sm text-gray-500">
+            Last synced: {formatDate(lastSyncTime)}
+          </span>
+        )}
+      </div>
     </div>
   );
 };

@@ -9,7 +9,7 @@ export default async function handler(req, res) {
     transactionId: req.body.transaction?.id,
     fullBody: req.body
   });
-  
+
   try {
     // Validate request method
     if (req.method !== 'POST') {
@@ -199,8 +199,8 @@ export default async function handler(req, res) {
       }
 
       case 'delete': {
-        const { id } = req.body;
-        if (!id) {
+        const transaction = req.body.transaction;
+        if (!transaction?.id) {
           return res.status(400).json({ 
             success: false,
             error: 'Missing transaction ID' 
@@ -208,7 +208,7 @@ export default async function handler(req, res) {
         }
 
         const { rows } = await getSheetData();
-        const rowNumber = rows.findIndex(row => row[0] === id) + 2;
+        const rowNumber = rows.findIndex(row => row[0] === transaction.id) + 2;
 
         if (rowNumber < 2) {
           return res.status(404).json({ 
