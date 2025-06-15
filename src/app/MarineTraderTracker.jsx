@@ -12,6 +12,16 @@ import {
   EditInvestmentModal, 
   ConfirmationModal 
 } from '../lib/Modals';
+import {
+  initialWallets,
+  initialInvestments,
+  initialTransactions,
+  initialPendingPayments,
+  walletTypeColors,
+  transactionTypes,
+  generateId
+} from '../data/constants'
+
 import { formatDate, getTypeIcon } from "../util/Helpers";
 import { memberColors, members } from "../util/Constants";
 
@@ -45,99 +55,6 @@ const useLocalStorage = (key, initialValue) => {
   return [storedValue, setValue];
 };
 
-const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
-
-// Initial data states
-const initialWallets = [
-  { id: generateId(), name: 'GCash Main', type: 'GCash', balance: 45000, memberInCharge: 'Kyle Yuan Uy' },
-  { id: generateId(), name: 'BTC Wallet', type: 'Crypto', balance: 80000, memberInCharge: 'Louis Uy' },
-  { id: generateId(), name: 'Cash Reserve', type: 'On-hand', balance: 25000, memberInCharge: 'Fritz Gioranz Tayo' },
-];
-
-const initialInvestments = [
-  { id: generateId(), name: 'Tech Startup A', memberInCharge: 'Kyle Yuan Uy', pnl: 15000, value: 75000 },
-  { id: generateId(), name: 'Forex Trading', memberInCharge: 'Louis Uy', pnl: -2500, value: 32500 },
-  { id: generateId(), name: 'Real Estate', memberInCharge: 'Fritz Gioranz Tayo', pnl: 28000, value: 128000 }
-];
-
-const initialTransactions =[
-    { 
-      id: generateId(), 
-      wallet: 'GCash Main', 
-      investment: 'Tech Startup A', 
-      amount: 10000, 
-      type: 'inbound', 
-      category: 'Capital In', 
-      date: '2024-06-08', 
-      member: 'Kyle Yuan Uy',
-      payee: null 
-    },
-    { 
-      id: generateId(), 
-      wallet: 'BTC Wallet', 
-      investment: null, 
-      amount: 5000, 
-      type: 'outbound', 
-      category: 'Trade', 
-      date: '2024-06-07', 
-      member: 'Louis Uy',
-      payee: null 
-    },
-    { 
-      id: generateId(), 
-      wallet: 'Cash Reserve', 
-      investment: 'Real Estate', 
-      amount: 25000, 
-      type: 'inbound', 
-      category: 'Repayment', 
-      date: '2024-06-06', 
-      member: 'Fritz Gioranz Tayo',
-      payee: 'Tenant A' 
-    },
-    { 
-      id: generateId(), 
-      wallet: 'GCash Main', 
-      investment: null, 
-      amount: 15000, 
-      type: 'outbound', 
-      category: 'Loan', 
-      date: '2024-06-05', 
-      member: 'Kyle Yuan Uy',
-      payee: 'Supplier Co.' 
-    }
-  ];
-
-const initialPendingPayments = [
-    { 
-      id: generateId(), 
-      payee: 'Supplier Co.', 
-      lender: 'Kyle Yuan Uy', 
-      amount: 15000, 
-      dueDate: '2024-06-15', 
-      wallet: 'GCash Main',
-      status: 'pending' 
-    },
-    { 
-      id: generateId(), 
-      payee: 'Contractor Inc.', 
-      lender: 'Louis Uy', 
-      amount: 25000, 
-      dueDate: '2024-06-20', 
-      wallet: 'BTC Wallet',
-      status: 'pending' 
-    },
-    { 
-      id: generateId(), 
-      payee: 'Material Supplier', 
-      lender: 'Fritz Gioranz Tayo', 
-      amount: 18000, 
-      dueDate: '2024-06-25', 
-      wallet: 'Cash Reserve',
-      status: 'pending' 
-    }
-  ]
-
-
 const MarineTraderTracker = () => {
 
   // State with localStorage persistence
@@ -161,8 +78,10 @@ const MarineTraderTracker = () => {
   const [showCompletePaymentModal, setShowCompletePaymentModal] = useState(false);
   const [showEditWalletModal, setShowEditWalletModal] = useState(false);
   const [showDeleteWalletModal, setShowDeleteWalletModal] = useState(false);
+  const [showEditInvestmentModal, setShowEditInvestmentModal] = useState(false);
   const [showDeleteInvestmentModal, setShowDeleteInvestmentModal] = useState(false);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  
   
   // Editing states
   const [editingTransaction, setEditingTransaction] = useState(null);
@@ -194,11 +113,14 @@ const MarineTraderTracker = () => {
     investment: '',
     amount: 0,
     article: '',
-    type: 'inbound',
+    type: 'inbound', // Default to inbound
     category: '',
     date: new Date().toISOString().slice(0, 10),
     member: '',
-    payee: ''
+    payee: '',
+    // Add these for transfers
+    targetWallet: '',
+    transferFee: 0
   });
 
   // Mock PnL over time data
@@ -211,84 +133,115 @@ const MarineTraderTracker = () => {
     { date: 'Jun', pnl: 40500 }
   ], []);
 
-  const walletTypeColors = useMemo(() => ({
-    'GCash': 'bg-blue-500',
-    'Crypto': 'bg-yellow-500',
-    'On-hand': 'bg-green-500',
-    'Bank': 'bg-red-500'
-  }), []);
-
 // Data synchronization
   const syncWithSheets = useCallback(async (action = 'sync', data = null) => {
+  if (action && typeof action === 'object') {
+    console.error('Received event object instead of action:', action);
+    action = 'sync'; // Reset to default
+    data = null;
+  }
+  
     try {
-      setIsSyncing(true);
+    setIsSyncing(true);
+    
+    console.log('--- Starting sync ---');
+    console.log('Action:', action);
+    console.log('Initial transactions data:', transactions);
+
+    // Prepare the payload based on action
+    let payload;
+    if (action === 'sync') {
+      const filteredTransactions = transactions
+        .filter(t => {
+          const hasId = !!t?.id;
+          if (!hasId) {
+            console.warn('Transaction missing ID:', t);
+          }
+          return hasId;
+        })
+        .map(t => ({
+          id: t.id,
+          date: t.date || new Date().toISOString().slice(0, 10),
+          wallet: t.wallet || '',
+          article: t.article || '',
+          amount: t.amount || 0,
+          type: t.type || 'inbound',
+          category: t.category || '',
+          member: t.member || '',
+          payee: t.payee || '',
+          lastmodified: t.lastmodified || new Date().toISOString()
+        }));
+
+      console.log('Filtered transactions for sync:', filteredTransactions);
       
-      if (action === 'delete' && (!data || !data.id)) {
-        throw new Error('Missing Transaction ID for deletion');
-      }
-
-      if (action !== 'sync' && !data?.id) {
-        throw new Error(`Invalid data for ${action} action`);
-      }
-
-      const payload = {
+      payload = {
         action,
-        [action === 'sync' ? 'transactions' : 'transaction']: 
-          action === 'sync' 
-            ? transactions
-                .filter(t => t?.id)
-                .map(t => ({
-                  id: t.id,
-                  date: t.date || new Date().toISOString().slice(0, 10),
-                  wallet: t.wallet || '',
-                  article: t.article || '',
-                  amount: t.amount || 0,
-                  type: t.type || 'inbound',
-                  category: t.category || '',
-                  member: t.member || '',
-                  payee: t.payee || '',
-                  lastmodified: t.lastmodified || new Date().toISOString()
-                }))
-            : {
-                id: data.id,
-                date: data.date || new Date().toISOString().slice(0, 10),
-                wallet: data.wallet || '',
-                article: data.article || '',
-                amount: data.amount || 0,
-                type: data.type || 'inbound',
-                category: data.category || '',
-                member: data.member || '',
-                payee: data.payee || '',
-                lastmodified: data.lastmodified || new Date().toISOString()
-              }
+        transactions: filteredTransactions
       };
-
-      const response = await fetch('/api/transactions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Sync failed with status ${response.status}`);
+    } else {
+      console.log('Data for non-sync action:', data);
+      
+      if (!data?.id) {
+        console.error('Missing ID in data:', data);
+        throw new Error(`Invalid data for ${action} action - missing ID`);
       }
       
-      if (action === 'sync') {
-        const mergedTransactions = await response.json();
-        setTransactions(mergedTransactions);
-      }
-      
-      setLastSyncTime(new Date().toISOString());
-      return true;
-    } catch (error) {
-      console.error('Sync error:', error.message);
-      alert(`Sync failed: ${error.message}`);
-      return false;
-    } finally {
-      setIsSyncing(false);
+      payload = {
+        action,
+        transaction: {
+          id: data.id,
+          date: data.date || new Date().toISOString().slice(0, 10),
+          wallet: data.wallet || '',
+          article: data.article || '',
+          amount: data.amount || 0,
+          type: data.type || 'inbound',
+          category: data.category || '',
+          member: data.member || '',
+          payee: data.payee || '',
+          lastmodified: data.lastmodified || new Date().toISOString()
+        }
+      };
     }
-  }, [transactions, setTransactions]);
+
+    console.log('Prepared payload:', payload);
+
+    const response = await fetch('/api/transactions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    console.log('Response status:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('API Error response:', errorData);
+      throw new Error(errorData.error || `Sync failed with status ${response.status}`);
+    }
+    
+    if (action === 'sync') {
+      const mergedTransactions = await response.json();
+      console.log('Received merged transactions:', mergedTransactions);
+      setTransactions(mergedTransactions);
+    }
+    
+    setLastSyncTime(new Date().toISOString());
+    console.log('Sync completed successfully');
+    return true;
+  } catch (error) {
+    console.error('Sync error:', {
+      message: error.message,
+      stack: error.stack,
+      action,
+      data,
+      transactionsAtError: transactions
+    });
+    alert(`Sync failed: ${error.message}`);
+    return false;
+  } finally {
+    setIsSyncing(false);
+  }
+}, [transactions, setTransactions]);
 
   useEffect(() => {
   // Initial sync
@@ -368,50 +321,89 @@ const MarineTraderTracker = () => {
     setShowAddInvestmentModal(false);
   }, [newInvestment, setInvestments]);
 
-  const addNewTransaction = useCallback(async (transaction) => {
-    setTransactions(prev => [...prev, transaction]);
-    try {
-      const success = await syncWithSheets('create', transaction);
-      if (!success) {
-        setTransactions(prev => prev.filter(t => t.id !== transaction.id));
-        alert('Failed to sync transaction with Google Sheets');
-      }
-    } catch (error) {
-      console.error('Transaction creation failed:', error);
-      setTransactions(prev => prev.filter(t => t.id !== transaction.id));
-      alert('Failed to create transaction. Please try again.');
-    }
-  }, [setTransactions, syncWithSheets]);
-
-  const updateTransaction = useCallback(async (updatedData) => {
-    const updatedTransaction = {
-      ...updatedData,
-      amount: Number(updatedData.amount),
+ const addNewTransaction = useCallback(async (transaction) => {
+  let transactionsToAdd = [];
+  
+  if (transaction.type === 'transfer') {
+    // Create two transactions for transfer:
+    // 1. Outbound from source wallet
+    // 2. Inbound to target wallet
+    
+    const outboundTx = {
+      ...transaction,
+      id: generateId(),
+      type: 'outbound',
+      category: 'Transfer Out',
+      amount: Number(transaction.amount),
       lastmodified: new Date().toISOString()
     };
     
-    setTransactions(prev => prev.map(t => 
-      t.id === updatedTransaction.id ? updatedTransaction : t
-    ));
+    const inboundTx = {
+      ...transaction,
+      id: generateId(),
+      type: 'inbound',
+      category: 'Transfer In',
+      wallet: transaction.targetWallet,
+      amount: Number(transaction.amount) - Number(transaction.transferFee || 0),
+      lastmodified: new Date().toISOString()
+    };
     
-    try {
-      const success = await syncWithSheets('update', updatedTransaction);
-      if (!success) {
-        setTransactions(prev => prev.map(t => 
-          t.id === updatedTransaction.id ? updatedData : t
-        ));
-        alert('Failed to sync updates with Google Sheets');
-      } else {
-        setEditingTransaction(null);
-        setShowAddTransactionModal(false);
+    transactionsToAdd = [outboundTx, inboundTx];
+    
+    // Update wallet balances immediately
+    setWallets(prev => prev.map(wallet => {
+      if (wallet.name === transaction.wallet) {
+        return { ...wallet, balance: wallet.balance - transaction.amount };
       }
-    } catch (error) {
-      console.error('Transaction update failed:', error);
-      setTransactions(prev => prev.map(t => 
-        t.id === updatedTransaction.id ? updatedData : t
+      if (wallet.name === transaction.targetWallet) {
+        return { ...wallet, balance: wallet.balance + (transaction.amount - (transaction.transferFee || 0)) };
+      }
+      return wallet;
+    }));
+  } else {
+    transactionsToAdd = [{
+      ...transaction,
+      id: generateId(),
+      amount: Number(transaction.amount),
+      lastmodified: new Date().toISOString()
+    }];
+    
+    // Update wallet balance for non-transfer transactions
+    if (transaction.type === 'inbound') {
+      setWallets(prev => prev.map(wallet => 
+        wallet.name === transaction.wallet 
+          ? { ...wallet, balance: wallet.balance + Number(transaction.amount) }
+          : wallet
+      ));
+    } else {
+      setWallets(prev => prev.map(wallet => 
+        wallet.name === transaction.wallet 
+          ? { ...wallet, balance: wallet.balance - Number(transaction.amount) }
+          : wallet
       ));
     }
-  }, [setTransactions, syncWithSheets]);
+  }
+
+  // Add the transaction(s) to state
+  setTransactions(prev => [...prev, ...transactionsToAdd]);
+  
+  try {
+    // Sync all new transactions
+    const results = await Promise.all(
+      transactionsToAdd.map(tx => syncWithSheets('create', tx))
+    );
+    
+    if (results.some(success => !success)) {
+      // Rollback if any sync fails
+      setTransactions(prev => prev.filter(t => !transactionsToAdd.some(nt => nt.id === t.id)));
+      alert('Failed to sync some transactions with Google Sheets');
+    }
+  } catch (error) {
+    console.error('Transaction creation failed:', error);
+    setTransactions(prev => prev.filter(t => !transactionsToAdd.some(nt => nt.id === t.id)));
+    alert('Failed to create transaction. Please try again.');
+  }
+}, [setTransactions, syncWithSheets, setWallets]);
 
 const deleteTransaction = useCallback(async (transactionId) => {
   if (!transactionId) {
@@ -764,6 +756,64 @@ const deleteTransaction = useCallback(async (transactionId) => {
   </div>
 ), [filteredData.investments]);
 
+  const updateTransaction = useCallback(async (updatedData) => {
+  const updatedTransaction = {
+    ...updatedData,
+    amount: Number(updatedData.amount),
+    lastmodified: new Date().toISOString()
+  };
+  
+  // First update the transaction in state
+  setTransactions(prev => prev.map(t => 
+    t.id === updatedTransaction.id ? updatedTransaction : t
+  ));
+  
+  try {
+    const success = await syncWithSheets('update', updatedTransaction);
+    if (!success) {
+      // If sync fails, revert the transaction in state
+      setTransactions(prev => prev.map(t => 
+        t.id === updatedTransaction.id ? updatedData : t
+      ));
+      alert('Failed to sync updates with Google Sheets');
+    } else {
+      // Only update wallet balances after successful sync
+      if (updatedTransaction.type === 'transfer') {
+        // For transfers, we need to update both wallets
+        setWallets(prev => prev.map(wallet => {
+          if (wallet.name === updatedTransaction.wallet) {
+            return { ...wallet, balance: wallet.balance - updatedTransaction.amount };
+          }
+          if (wallet.name === updatedTransaction.targetWallet) {
+            return { ...wallet, balance: wallet.balance + (updatedTransaction.amount - (updatedTransaction.transferFee || 0)) };
+          }
+          return wallet;
+        }));
+      } else if (updatedTransaction.type === 'inbound') {
+        setWallets(prev => prev.map(wallet => 
+          wallet.name === updatedTransaction.wallet 
+            ? { ...wallet, balance: wallet.balance + updatedTransaction.amount }
+            : wallet
+        ));
+      } else {
+        setWallets(prev => prev.map(wallet => 
+          wallet.name === updatedTransaction.wallet 
+            ? { ...wallet, balance: wallet.balance - updatedTransaction.amount }
+            : wallet
+        ));
+      }
+      
+      setEditingTransaction(null);
+      setShowAddTransactionModal(false);
+    }
+  } catch (error) {
+    console.error('Transaction update failed:', error);
+    setTransactions(prev => prev.map(t => 
+      t.id === updatedTransaction.id ? updatedData : t
+    ));
+  }
+}, [setTransactions, syncWithSheets, setWallets]);
+
   const renderHistory = useCallback(() => {
   const filteredTransactions = filteredData.transactions.filter(transaction => {
     const searchTermLower = searchTerm.toLowerCase();
@@ -839,7 +889,15 @@ const deleteTransaction = useCallback(async (transactionId) => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                  {transaction.category}
+                  {transaction.category === 'Transfer Out' 
+                    ? `Transfer to ${transaction.targetWallet || 'Unknown'}`
+                    : transaction.category === 'Transfer In'
+                      ? `Transfer from ${transactions.find(t => 
+                          t.date === transaction.date && 
+                          Math.abs(t.amount - transaction.amount) <= (t.transferFee || 0) &&
+                          t.category === 'Transfer Out'
+                        )?.wallet || 'Unknown'}`
+                      : transaction.category}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
                   {transaction.category === 'Loan' 
@@ -1080,7 +1138,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
 
       <div className="fixed bottom-4 right-4 flex items-center space-x-2">
         <button 
-          onClick={syncWithSheets}
+          onClick={() => syncWithSheets()} // Wrap in arrow function
           disabled={isSyncing}
           className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50"
         >

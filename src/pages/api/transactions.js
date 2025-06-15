@@ -4,11 +4,10 @@ import { google } from 'googleapis';
 export default async function handler(req, res) {
   // Enhanced logging
   // In your /api/transactions.js
-  console.log('Received delete request with:', {
-    action: req.body.action,
-    transactionId: req.body.transaction?.id,
-    fullBody: req.body
-  });
+  console.log('--- API Request Received ---');
+  console.log('Method:', req.method);
+  console.log('Headers:', req.headers);
+  console.log('Body:', req.body);
 
   try {
     // Validate request method
@@ -78,10 +77,13 @@ export default async function handler(req, res) {
       }
     };
 
+    console.log('Processing action:', req.body.action);
+
     // Handle different actions
     switch (req.body.action) {
       case 'sync': {
         // Get existing data from sheet
+        console.log('Sync request - transactions count:', req.body.transactions?.length);
         const { headers, rows } = await getSheetData();
         
         // Format remote transactions
@@ -145,88 +147,88 @@ export default async function handler(req, res) {
 
       case 'create':
       case 'update': {
-        const transaction = req.body.transaction;
-        if (!transaction) {
-          return res.status(400).json({ 
-            success: false,
-            error: 'Missing transaction data' 
-          });
-        }
+  console.log(`${req.body.action} request - transaction:`, req.body.transaction);
+  const transaction = req.body.transaction;
+  
+  if (!transaction) {
+    return res.status(400).json({ 
+      success: false,
+      error: 'Missing transaction data' 
+    });
+  }
 
-        // For updates, we need to find the row number
-        let rowNumber = null;
-        if (req.body.action === 'update') {
-          const { rows } = await getSheetData();
-          rowNumber = rows.findIndex(row => row[0] === transaction.id) + 2;
-        }
+  // For transfers, we need to handle multiple transactions
+  if (transaction.type === 'transfer') {
+        // Create both outbound and inbound transactions
+        const outboundTx = {
+          ...transaction,
+          type: 'outbound',
+          category: 'Transfer Out'
+        };
+        
+        const inboundTx = {
+          ...transaction,
+          type: 'inbound',
+          category: 'Transfer In',
+          wallet: transaction.targetWallet,
+          amount: transaction.amount - (transaction.transferFee || 0)
+        };
 
-        const values = [
-          transaction.id,
-          transaction.date,
-          transaction.wallet,
-          transaction.article,
-          transaction.amount,
-          transaction.type,
-          transaction.category,
-          transaction.member,
-          transaction.payee || '',
-          transaction.lastmodified || new Date().toISOString()
-        ];
-
-        if (rowNumber) {
-          // Update existing row
-          await sheets.spreadsheets.values.update({
-            spreadsheetId: SPREADSHEET_ID,
-            range: `${SHEET_NAME}!A${rowNumber}:J${rowNumber}`,
-            valueInputOption: 'USER_ENTERED',
-            resource: { values: [values] }
-          });
-        } else {
-          // Append new row
-          await sheets.spreadsheets.values.append({
-            spreadsheetId: SPREADSHEET_ID,
-            range: RANGE,
-            valueInputOption: 'USER_ENTERED',
-            resource: { values: [values] }
-          });
-        }
+        // Process both transactions
+        const [outboundResult, inboundResult] = await Promise.all([
+          processSingleTransaction(sheets, SPREADSHEET_ID, SHEET_NAME, outboundTx, req.body.action),
+          processSingleTransaction(sheets, SPREADSHEET_ID, SHEET_NAME, inboundTx, req.body.action)
+        ]);
 
         return res.status(200).json({ 
-          success: true,
-          action: req.body.action,
-          rowUpdated: rowNumber 
+          success: outboundResult.success && inboundResult.success,
+          actions: [outboundResult, inboundResult]
         });
+      } else {
+        // Normal transaction processing
+        const result = await processSingleTransaction(
+          sheets, 
+          SPREADSHEET_ID, 
+          SHEET_NAME, 
+          transaction, 
+          req.body.action
+        );
+        
+        return res.status(200).json(result);
       }
+    }
 
       case 'delete': {
-        const transaction = req.body.transaction;
-        if (!transaction?.id) {
-          return res.status(400).json({ 
-            success: false,
-            error: 'Missing transaction ID' 
-          });
-        }
-
-        const { rows } = await getSheetData();
-        const rowNumber = rows.findIndex(row => row[0] === transaction.id) + 2;
-
-        if (rowNumber < 2) {
-          return res.status(404).json({ 
-            success: false,
-            error: 'Transaction not found' 
-          });
-        }
-
-        await sheets.spreadsheets.values.clear({
-          spreadsheetId: SPREADSHEET_ID,
-          range: `${SHEET_NAME}!A${rowNumber}:J${rowNumber}`,
-        });
-
-        return res.status(200).json({ 
-          success: true,
-          rowDeleted: rowNumber 
+        console.log('Delete request - transaction:', req.body.transaction);
+  
+      const transaction = req.body.transaction;
+      if (!transaction?.id) {
+        return res.status(400).json({ 
+          success: false,
+          error: 'Missing transaction ID' 
         });
       }
+
+      const { rows } = await getSheetData();
+      const rowNumber = rows.findIndex(row => row[0] === transaction.id) + 2;
+
+      if (rowNumber < 2) {
+        return res.status(404).json({ 
+          success: false,
+          error: 'Transaction not found' 
+        });
+      }
+
+      await sheets.spreadsheets.values.clear({
+        spreadsheetId: SPREADSHEET_ID,
+        range: `${SHEET_NAME}!A${rowNumber}:J${rowNumber}`,
+      });
+
+      return res.status(200).json({ 
+        success: true,
+        rowDeleted: rowNumber 
+      });
+    }
 
       default:
         return res.status(400).json({ 
@@ -288,4 +290,52 @@ function mergeTransactions(local, remote) {
   });
 
   return Array.from(transactionMap.values());
+}
+
+
+async function processSingleTransaction(sheets, spreadsheetId, sheetName, transaction, action) {
+  const { rows } = await sheets.spreadsheets.values.get({
+    spreadsheetId,
+    range: `${sheetName}!A1:J`,
+  });
+
+  let rowNumber = null;
+  if (action === 'update') {
+    rowNumber = rows.findIndex(row => row[0] === transaction.id) + 2;
+  }
+
+  const values = [
+    transaction.id,
+    transaction.date,
+    transaction.wallet,
+    transaction.article,
+    transaction.amount,
+    transaction.type,
+    transaction.category,
+    transaction.member,
+    transaction.payee || '',
+    transaction.lastmodified || new Date().toISOString()
+  ];
+
+  if (rowNumber) {
+    await sheets.spreadsheets.values.update({
+      spreadsheetId,
+      range: `${sheetName}!A${rowNumber}:J${rowNumber}`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: [values] }
+    });
+  } else {
+    await sheets.spreadsheets.values.append({
+      spreadsheetId,
+      range: `${sheetName}!A1:J`,
+      valueInputOption: 'USER_ENTERED',
+      resource: { values: [values] }
+    });
+  }
+
+  return { 
+    success: true,
+    action,
+    rowUpdated: rowNumber 
+  };
 }

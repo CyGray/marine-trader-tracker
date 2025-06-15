@@ -203,84 +203,171 @@ export const AddTransactionModal = ({
   wallets, 
   investments, 
   members,
-  editingTransaction,
+  transaction,
   onUpdateWallet,
   onUpdateInvestment
 }) => {
   const [transactionData, setTransactionData] = useState({
     wallet: '',
     investment: '',
-    article: '', // New field
+    article: '',
     amount: 0,
     type: 'inbound',
     category: '',
     date: new Date().toISOString().slice(0, 10),
-    payee: ''
+    payee: '',
+    targetWallet: '',
+    transferFee: 0
   });
 
   const [useCustomDate, setUseCustomDate] = useState(false);
   const [validationError, setValidationError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
+  const [customCategoryType, setCustomCategoryType] = useState('inbound');
+
+  // Define category options based on transaction type
+  const getCategoryOptions = (type) => {
+    const baseOptions = [
+      { value: '', label: 'Select Category' },
+      { value: 'Custom', label: '+ Add Custom Category' }
+    ];
+
+    const inboundOptions = [
+      { value: 'Capital In', label: 'Capital In' },
+      { value: 'Repayment', label: 'Repayment' },
+      { value: 'Sell Crypto', label: 'Sell Crypto' },
+      { value: 'Close Trade', label: 'Close Trade' }
+    ];
+
+    const outboundOptions = [
+      { value: 'Capital Out', label: 'Capital Out' },
+      { value: 'Loan', label: 'Loan' },
+      { value: 'Materials', label: 'Materials' },
+      { value: 'Buy Crypto', label: 'Buy Crypto' },
+      { value: 'Open Trade', label: 'Open Trade' }
+    ];
+
+    const transferOptions = [
+      { value: 'Transfer Out', label: 'Transfer Out' }
+    ];
+
+    switch (type) {
+      case 'inbound':
+        return [...baseOptions, ...inboundOptions];
+      case 'outbound':
+        return [...baseOptions, ...outboundOptions];
+      case 'transfer':
+        return [...baseOptions, ...transferOptions];
+      default:
+        return baseOptions;
+    }
+  };
+
+  const [categoryOptions, setCategoryOptions] = useState(getCategoryOptions('inbound'));
 
   useEffect(() => {
-    if (editingTransaction) {
-      // For existing transactions, we'll keep the original member
+    if (transaction) {
       setTransactionData({
-        wallet: editingTransaction.wallet,
-        investment: editingTransaction.investment || '',
-        article: editingTransaction.article || '', // New field
-        amount: editingTransaction.amount,
-        type: editingTransaction.type,
-        category: editingTransaction.category,
-        date: editingTransaction.date,
-        payee: editingTransaction.payee || ''
+        wallet: transaction.wallet,
+        investment: transaction.investment || '',
+        article: transaction.article || '',
+        amount: transaction.amount,
+        type: transaction.type,
+        category: transaction.category,
+        date: transaction.date,
+        payee: transaction.payee || '',
+        targetWallet: transaction.targetWallet || '',
+        transferFee: transaction.transferFee || 0
       });
       setUseCustomDate(true);
     }
-  }, [editingTransaction]);
+  }, [transaction]);
+
+  useEffect(() => {
+    // Update category options when transaction type changes
+    setCategoryOptions(getCategoryOptions(transactionData.type));
+    
+    // Reset category if it's not valid for the new type
+    if (transactionData.category && !getCategoryOptions(transactionData.type).some(opt => opt.value === transactionData.category)) {
+      setTransactionData(prev => ({ ...prev, category: '' }));
+    }
+  }, [transactionData.type]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setTransactionData(prev => ({
-      ...prev,
-      [name]: name === 'amount' ? Number(value) : value
-    }));
     
-    // Clear validation error when user makes changes
-    if (name === 'amount' || name === 'type' || name === 'wallet') {
+    if (name === 'category') {
+      if (value === 'Custom') {
+        setShowCustomCategoryInput(true);
+        setTransactionData(prev => ({ ...prev, [name]: '' }));
+      } else {
+        setShowCustomCategoryInput(false);
+        setTransactionData(prev => ({ ...prev, [name]: value }));
+      }
+    } else {
+      setTransactionData(prev => ({
+        ...prev,
+        [name]: name === 'amount' || name === 'transferFee' ? Number(value) : value
+      }));
+    }
+    
+    if (name === 'amount' || name === 'type' || name === 'wallet' || name === 'targetWallet') {
       setValidationError('');
     }
   };
 
+  const handleAddCustomCategory = () => {
+    if (!customCategory.trim()) {
+      setValidationError('Please enter a category name');
+      return;
+    }
+
+    // Add the new category to the appropriate options
+    const newCategory = {
+      value: customCategory,
+      label: customCategory
+    };
+
+    const updatedOptions = [
+      ...getCategoryOptions(customCategoryType).filter(opt => opt.value !== 'Custom'),
+      newCategory,
+      { value: 'Custom', label: '+ Add Custom Category' }
+    ];
+
+    setCategoryOptions(updatedOptions);
+    setTransactionData(prev => ({ ...prev, category: customCategory }));
+    setShowCustomCategoryInput(false);
+    setCustomCategory('');
+    setValidationError('');
+  };
+
   const validateTransaction = () => {
-    if (!transactionData.wallet || !transactionData.amount) {
-      return 'Please fill in all required fields';
+    if (!transactionData.wallet) return 'Please select a source wallet';
+    if (transactionData.type === 'transfer' && !transactionData.targetWallet) return 'Please select a target wallet';
+    if (transactionData.amount <= 0) return 'Amount must be greater than 0';
+    if (transactionData.type === 'transfer' && transactionData.transferFee < 0) return 'Transfer fee cannot be negative';
+    if (!transactionData.category) return 'Please select a category';
+
+    const sourceWallet = wallets.find(w => w.name === transactionData.wallet);
+    if (!sourceWallet) return 'Selected source wallet not found';
+
+    if (transactionData.type === 'transfer') {
+      const targetWallet = wallets.find(w => w.name === transactionData.targetWallet);
+      if (!targetWallet) return 'Selected target wallet not found';
+      if (sourceWallet.name === targetWallet.name) return 'Source and target wallets cannot be the same';
     }
 
-    const wallet = wallets.find(w => w.name === transactionData.wallet);
-    if (!wallet) {
-      return 'Selected wallet not found';
-    }
-
-    const amount = transactionData.type === 'inbound' 
-      ? transactionData.amount 
-      : -transactionData.amount;
-
-    const newWalletBalance = wallet.balance + amount;
-    if (newWalletBalance < 0) {
+    if (transactionData.type !== 'inbound' && (sourceWallet.balance - transactionData.amount < 0)) {
       return 'This transaction would result in a negative wallet balance';
     }
 
     if (transactionData.investment) {
       const investment = investments.find(i => i.name === transactionData.investment);
       if (investment) {
-        const investmentChange = transactionData.type === 'inbound'
-          ? transactionData.amount
-          : -transactionData.amount;
-
-        const newInvestmentValue = investment.value + investmentChange;
-        if (newInvestmentValue < 0) {
-          return 'This transaction would result in a negative investment value';
-        }
+        const change = transactionData.type === 'inbound' ? transactionData.amount : -transactionData.amount;
+        if (investment.value + change < 0) return 'This would result in negative investment value';
       }
     }
 
@@ -289,203 +376,315 @@ export const AddTransactionModal = ({
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    
     const error = validateTransaction();
     if (error) {
       setValidationError(error);
       return;
     }
 
-    const wallet = wallets.find(w => w.name === transactionData.wallet);
-    const amount = transactionData.type === 'inbound' 
-      ? transactionData.amount 
-      : -transactionData.amount;
-
-    // Get member from wallet
-    const member = wallet.memberInCharge;
-
-    // Update investment if specified
-    if (transactionData.investment) {
-      const investment = investments.find(i => i.name === transactionData.investment);
-      if (investment) {
-        const investmentChange = transactionData.type === 'inbound'
-          ? transactionData.amount
-          : -transactionData.amount;
-
-        onUpdateInvestment({
-          ...investment,
-          value: investment.value + investmentChange
-        });
-      }
-    }
-
-    // Update the wallet balance
-    onUpdateWallet({
-      ...wallet,
-      balance: wallet.balance + amount
-    });
-
-    // Save the transaction with member from wallet
-    onSave({
-      id: editingTransaction?.id || generateId(),
-      ...transactionData,
-      member: member, // Automatically set from wallet
-      investment: transactionData.investment || null,
-      payee: transactionData.payee || null
-    });
-
+    setIsSubmitting(true);
+    onSave(transactionData);
+    setIsSubmitting(false);
     onClose();
   };
 
   return (
     <div 
-      className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50"
+      className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center p-4 z-50"
       onMouseDown={onClose}
     >
       <div 
-        className="bg-white rounded-lg p-6 w-96 max-h-[80vh] overflow-y-auto"
+        className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold mb-4 text-black">
-          {editingTransaction ? 'Edit Transaction' : 'Add New Transaction'}
-        </h2>
-        <form onSubmit={handleSubmit}>
-          <div className="space-y-4">
-            <select
-              name="wallet"
-              className="w-full p-2 border rounded"
-              value={transactionData.wallet}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select Wallet</option>
-              {wallets.map(wallet => (
-                <option key={wallet.id} value={wallet.name}>
-                  {wallet.name} ({wallet.memberInCharge})
-                </option>
-              ))}
-            </select>
-            <select
-              name="investment"
-              className="w-full p-2 border rounded"
-              value={transactionData.investment}
-              onChange={handleChange}
-            >
-              <option value="">Select Investment (Optional)</option>
-              {investments.map(investment => (
-                <option key={investment.id} value={investment.name}>
-                  {investment.name} ({investment.memberInCharge})
-                </option>
-              ))}
-            </select>
-            <input
-              type="text"
-              name="article"
-              placeholder="Article/Item Name"
-              className="w-full p-2 border rounded"
-              value={transactionData.article}
-              onChange={handleChange}
-            />
-            <div>
-              <input
-                type="number"
-                name="amount"
-                placeholder="Amount"
-                className={`w-full p-2 border rounded ${
-                  validationError.includes('negative') ? 'border-red-500' : ''
-                }`}
-                value={transactionData.amount}
-                onChange={handleChange}
-                required
-                min="0.01"
-                step="any"
-              />
-              {validationError && (
-                <p className="text-red-500 text-sm mt-1">{validationError}</p>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-2xl font-bold text-gray-900">
+            {transaction ? 'Edit Transaction' : 'Add New Transaction'}
+          </h2>
+          <button 
+            onClick={onClose} 
+            className="text-gray-500 hover:text-gray-700 text-2xl"
+            disabled={isSubmitting}
+          >
+            &times;
+          </button>
+        </div>
+
+        {validationError && (
+          <div className="mb-6 p-3 bg-red-100 text-red-700 rounded-lg">
+            {validationError}
+          </div>
+        )}
+
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Left Column */}
+            <div className="space-y-6">
+              {/* Transaction Type */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select
+                  name="type"
+                  value={transactionData.type}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={isSubmitting}
+                >
+                  <option value="inbound">Inbound</option>
+                  <option value="outbound">Outbound</option>
+                  <option value="transfer">Transfer</option>
+                </select>
+              </div>
+
+              {/* Source Wallet */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {transactionData.type === 'transfer' ? 'From Wallet' : 'Wallet'}
+                </label>
+                <select
+                  name="wallet"
+                  value={transactionData.wallet}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={isSubmitting}
+                >
+                  <option value="">Select Wallet</option>
+                  {wallets.map(wallet => (
+                    <option key={wallet.id} value={wallet.name}>
+                      {wallet.name} (₱{wallet.balance.toLocaleString()})
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Target Wallet (for transfers) */}
+              {transactionData.type === 'transfer' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">To Wallet</label>
+                    <select
+                      name="targetWallet"
+                      value={transactionData.targetWallet}
+                      onChange={handleChange}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      required
+                      disabled={isSubmitting}
+                    >
+                      <option value="">Select Target Wallet</option>
+                      {wallets
+                        .filter(w => w.name !== transactionData.wallet)
+                        .map(wallet => (
+                          <option key={wallet.id} value={wallet.name}>
+                            {wallet.name} (₱{wallet.balance.toLocaleString()})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Transfer Fee</label>
+                    <input
+                      type="number"
+                      name="transferFee"
+                      min="0"
+                      step="0.01"
+                      value={transactionData.transferFee}
+                      onChange={handleChange}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      disabled={isSubmitting}
+                    />
+                  </div>
+
+                  <div className="p-3 bg-blue-50 rounded-lg">
+                    <p className="text-sm font-medium text-blue-700">
+                      Net Amount: ₱{(transactionData.amount - transactionData.transferFee).toLocaleString()}
+                    </p>
+                  </div>
+                </>
               )}
-            </div>
-            <div className="space-y-2">
-              <label className="block text-sm text-black font-medium">Transaction Type</label>
-              <div className="flex space-x-4">
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="type"
-                    value="inbound"
-                    className="mr-2"
-                    checked={transactionData.type === 'inbound'}
-                    onChange={handleChange}
-                  />
-                  Inbound
-                </label>
-                <label className="flex items-center">
-                  <input
-                    type="radio"
-                    name="type"
-                    value="outbound"
-                    className="mr-2"
-                    checked={transactionData.type === 'outbound'}
-                    onChange={handleChange}
-                  />
-                  Outbound
-                </label>
+
+              {/* Amount */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                <input
+                  type="number"
+                  name="amount"
+                  min="0.01"
+                  step="0.01"
+                  value={transactionData.amount}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={isSubmitting}
+                />
               </div>
             </div>
-            <select
-              name="category"
-              className="w-full p-2 border rounded"
-              value={transactionData.category}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select Category</option>
-              <option value="Capital In">Capital In</option>
-              <option value="Repayment">Repayment</option>
-              <option value="Trade">Trade</option>
-              <option value="Payment">Payment</option>
-              <option value="Loan">Loan</option>
-              <option value="Materials">Materials</option>
-            </select>
-            <div className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="customDate"
-                checked={useCustomDate}
-                onChange={(e) => setUseCustomDate(e.target.checked)}
-              />
-              <label htmlFor="customDate" className="text-sm text-black">Custom Date?</label>
-            </div>
-            {useCustomDate && (
-              <input
-                type="date"
-                name="date"
-                className="w-full p-2 border rounded"
-                value={transactionData.date}
+
+            {/* Right Column */}
+            <div className="space-y-6">
+              {/* Investment (optional) */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Investment (optional)</label>
+                <select
+                  name="investment"
+                  value={transactionData.investment}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={isSubmitting}
+                >
+                  <option value="">Select Investment</option>
+                  {investments.map(investment => (
+                    <option key={investment.id} value={investment.name}>
+                      {investment.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Category - Hidden for transfers */}
+              {/* Category selection */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Category
+              </label>
+              <select
+                name="category"
+                value={transactionData.category}
                 onChange={handleChange}
-              />
+                className="w-full p-2 border rounded"
+                required
+              >
+                {categoryOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Custom category input */}
+            {showCustomCategoryInput && (
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <div className="mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Category Name
+                  </label>
+                  <input
+                    type="text"
+                    value={customCategory}
+                    onChange={(e) => setCustomCategory(e.target.value)}
+                    className="w-full p-2 border rounded"
+                    placeholder="Enter category name"
+                  />
+                </div>
+                <div className="mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Category Type
+                  </label>
+                  <div className="flex space-x-4">
+                    {['inbound', 'outbound'].map(type => (
+                      <label key={type} className="flex items-center">
+                        <input
+                          type="radio"
+                          name="customCategoryType"
+                          value={type}
+                          checked={customCategoryType === type}
+                          onChange={() => setCustomCategoryType(type)}
+                          className="mr-2"
+                        />
+                        <span className="capitalize">{type}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleAddCustomCategory}
+                  className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
+                >
+                  Add Category
+                </button>
+              </div>
             )}
-            <input
-              type="text"
-              name="payee"
-              placeholder="Payee (for Loans/Repayments)"
-              className="w-full p-2 border rounded"
-              value={transactionData.payee}
-              onChange={handleChange}
-            />
+
+              {/* Article */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Article/Description</label>
+                <input
+                  type="text"
+                  name="article"
+                  value={transactionData.article}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              {/* Payee - Hidden for transfers */}
+              {transactionData.type !== 'transfer' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    {transactionData.type === 'inbound' ? 'From' : 'To'} (Payee)
+                  </label>
+                  <input
+                    type="text"
+                    name="payee"
+                    value={transactionData.payee}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    disabled={isSubmitting}
+                  />
+                </div>
+              )}
+
+              {/* Date */}
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="useCustomDate"
+                  checked={useCustomDate}
+                  onChange={() => setUseCustomDate(!useCustomDate)}
+                  className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  disabled={isSubmitting}
+                />
+                <label htmlFor="useCustomDate" className="text-sm font-medium text-gray-700">
+                  Use custom date
+                </label>
+              </div>
+
+              {useCustomDate && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <input
+                    type="date"
+                    name="date"
+                    value={transactionData.date}
+                    onChange={handleChange}
+                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    required
+                    disabled={isSubmitting}
+                  />
+                </div>
+              )}
+            </div>
           </div>
-          <div className="flex justify-end space-x-2 mt-6">
+
+          <div className="flex justify-end space-x-3 pt-6">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-black hover:bg-gray-100 rounded"
+              className="px-6 py-3 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              disabled={isSubmitting}
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              className="px-6 py-3 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+              disabled={isSubmitting}
             >
-              {editingTransaction ? 'Update' : 'Add'} Transaction
+              {isSubmitting ? 'Processing...' : transaction ? 'Update' : 'Add'} Transaction
             </button>
           </div>
         </form>
