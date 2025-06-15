@@ -59,8 +59,26 @@ const [isSyncing, setIsSyncing] = useState(false);
 const syncWithSheets = async (action = 'sync', data = null) => {
   try {
     setIsSyncing(true);
+    console.log(`Syncing ${action} action using data: \n${data}`);
     
     // Validate data before proceeding
+    if (action === 'delete') {
+      console.log('Delete action data:', data);
+      
+      // Validate delete data structure
+      if (!data || !data.id) {
+        const errorMsg = 'Missing Transaction ID for deletion';
+        console.error(errorMsg, 'Data received:', data);
+        throw new Error(errorMsg);
+      }
+      
+      return await fetch('/api/transactions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, id: data.id })
+      });
+    }
+
     if (action !== 'sync' && !data?.id) {
       throw new Error(`Invalid data for ${action} action`);
     }
@@ -258,6 +276,8 @@ useEffect(() => {
   const [walletToDelete, setWalletToDelete] = useState(null);
   // Add this with your other state declarations
   const [showDeleteInvestmentModal, setShowDeleteInvestmentModal] = useState(false);
+  const [transactionToDelete, setTransactionToDelete] = useState(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   
 
 
@@ -429,14 +449,58 @@ const updateTransaction = async (updatedData) => {
   }
 };
 
-// Delete Transaction
-const deleteTransaction = async (id) => {
-  // Optimistic update
-  setTransactions(transactions.filter(t => t.id !== id));
+const logTransactionDelete = (transactionId, location) => {
+    console.log(`[Delete Transaction] ID: ${transactionId}, Location: ${location}`);
+    console.log(`Transaction Object:`, 
+      transactions.find(t => t.id === transactionId) || 'Not found'
+    );
+  };
   
-  // Sync to Google Sheets
-  await syncWithSheets('delete', { id });
-};
+// Update deleteTransaction function
+  const deleteTransaction = async (transactionId) => {
+    if (!transactionId) {
+      console.error('No transaction ID provided for deletion');
+      alert('No transaction ID provided for deletion');
+      return;
+    }
+
+    // Log before deletion
+    logTransactionDelete(transactionId, 'Before optimistic update');
+    
+    // Optimistic update
+    const originalTransactions = [...transactions];
+    setTransactions(transactions.filter(t => t.id !== transactionId));
+    
+    try {
+      // Log before API call
+      console.log('Attempting to delete transaction:', transactionId);
+      
+      // Sync to Google Sheets - pass minimal required data
+      await syncWithSheets('delete', { id: transactionId });
+      
+      // Log success
+      console.log('Successfully deleted transaction:', transactionId);
+    } catch (error) {
+      console.error('Failed to delete transaction:', error);
+      
+      // Rollback on error
+      setTransactions(originalTransactions);
+      alert(`Failed to delete transaction: ${error.message}`);
+    }
+  };
+
+  // Update the confirmDelete function
+  const confirmDelete = (transaction) => {
+    if (!transaction || !transaction.id) {
+      console.error('Invalid transaction object in confirmDelete:', transaction);
+      alert('Invalid transaction data');
+      return;
+    }
+    
+    logTransactionDelete(transaction.id, 'Confirmation modal');
+    setTransactionToDelete(transaction);
+    setShowDeleteConfirmation(true);
+  };
 
   // Payment operations
   const handlePaymentComplete = (payment) => {
@@ -735,6 +799,21 @@ const handleDeleteInvestment = (id) => {
   </div>
 );
 
+
+
+const handleDeleteConfirmed = async () => {
+  if (transactionToDelete) {
+    console.log('Confirmed deletion of:', transactionToDelete);
+    try {
+      await deleteTransaction(transactionToDelete.id); 
+    } catch (error) {
+      console.error('Deletion failed:', error);
+    }
+  }
+  setShowDeleteConfirmation(false);
+  setTransactionToDelete(null);
+};
+
   const renderHistory = () => {
     const filteredTransactions = filteredData.transactions.filter(transaction => {
       const searchTermLower = searchTerm.toLowerCase();
@@ -834,7 +913,7 @@ const handleDeleteInvestment = (id) => {
                       <Edit size={16} />
                     </button>
                     <button 
-                      onClick={() => deleteTransaction(transaction.id)}
+                      onClick={() => confirmDelete(transaction)}
                       className="text-red-600 hover:text-red-800"
                     >
                       <Trash2 size={16} />
@@ -1038,6 +1117,15 @@ const handleDeleteInvestment = (id) => {
       setShowDeleteWalletModal(false);
       setWalletToDelete(null);
     }}
+  />
+)}
+
+{showDeleteConfirmation && (
+  <ConfirmationModal
+    title="Delete Transaction"
+    message="Are you sure you want to delete this transaction?"
+    onConfirm={handleDeleteConfirmed}
+    onCancel={() => setShowDeleteConfirmation(false)}
   />
 )}
 

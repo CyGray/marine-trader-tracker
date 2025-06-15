@@ -3,10 +3,13 @@ import { google } from 'googleapis';
 
 export default async function handler(req, res) {
   // Enhanced logging
-  console.log('--- NEW REQUEST ---');
-  console.log('Method:', req.method);
-  console.log('Body:', JSON.stringify(req.body, null, 2));
-
+  // In your /api/transactions.js
+  console.log('Received delete request with:', {
+    action: req.body.action,
+    transactionId: req.body.transaction?.id,
+    fullBody: req.body
+  });
+  
   try {
     // Validate request method
     if (req.method !== 'POST') {
