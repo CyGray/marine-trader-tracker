@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Check, Plus, Search, Filter, Edit, Trash2, TrendingUp, Wallet, Building2, History } from 'lucide-react';
+import { Check, Plus, Search, Filter, Edit, Trash2, TrendingUp, Building2, History, X, Calendar, Wallet, FileText, Activity, Tag, User, DollarSign, Settings } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
   AddInvestmentModal, 
@@ -69,16 +69,13 @@ const MarineTraderTracker = () => {
   const [selectedMembers, setSelectedMembers] = useState(['Kyle Yuan Uy']);
   const [searchTerm, setSearchTerm] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [showFilters, setShowFilters] = useState(false);
-  const [activeFilter, setActiveFilter] = useState({
-    type: null,
-    category: null,
-    dateRange: null
-  });
-  const [sortConfig, setSortConfig] = useState({
-    key: 'date',
-    direction: 'desc'
-  });
+  const [sortConfig, setSortConfig] = useState([
+  { key: 'date', direction: 'desc' }
+]);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [showFilterOptions, setShowFilterOptions] = useState(false);
+  const [selectedFilterField, setSelectedFilterField] = useState(null);
+  const [activeFilters, setActiveFilters] = useState({});
   
   // Modal states
   const [showAddWalletModal, setShowAddWalletModal] = useState(false);
@@ -142,13 +139,26 @@ const MarineTraderTracker = () => {
     { date: 'Jun', pnl: 40500 }
   ], []);
 
-  const handleSort = useCallback((key) => {
-    let direction = 'asc';
-    if (sortConfig.key === key && sortConfig.direction === 'asc') {
-      direction = 'desc';
-    }
-    setSortConfig({ key, direction });
-  }, [sortConfig]);
+  const handleSort = (key) => {
+    setSortConfig(prev => {
+      // Remove existing sort for this key if it exists
+      const existingSortIndex = prev.findIndex(s => s.key === key);
+      
+      if (existingSortIndex >= 0) {
+        // Toggle direction if it exists
+        const newSorts = [...prev];
+        newSorts[existingSortIndex] = {
+          key,
+          direction: newSorts[existingSortIndex].direction === 'asc' ? 'desc' : 'asc'
+        };
+        return newSorts;
+      } else {
+        // Add new sort (default to ascending)
+        return [...prev, { key, direction: 'asc' }];
+      }
+    });
+    setCurrentPage(1);
+  };
 
 // Data synchronization
   const syncWithSheets = useCallback(async (action = 'sync', data = null) => {
@@ -820,53 +830,49 @@ const deleteTransaction = useCallback(async (transactionId) => {
     );
   });
 
-  // Apply type filter if active
-  if (activeFilter.type) {
-    filteredTransactions = filteredTransactions.filter(
-      t => t.type === activeFilter.type
-    );
-  }
-
-  // Apply category filter if active
-  if (activeFilter.category) {
-    filteredTransactions = filteredTransactions.filter(
-      t => t.category === activeFilter.category
-    );
-  }
-
-  // Apply date range filter if active
-  if (activeFilter.dateRange) {
-    const [startDate, endDate] = activeFilter.dateRange;
-    filteredTransactions = filteredTransactions.filter(t => {
-      const transactionDate = new Date(t.date);
-      return (
-        (!startDate || transactionDate >= new Date(startDate)) &&
-        (!endDate || transactionDate <= new Date(endDate))
-      );
-    });
-  }
-
-  // Apply sorting
-  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
-    const dateA = new Date(a.date);
-    const dateB = new Date(b.date);
-    
-    switch (sortConfig.key) {
-      case 'date':
-        return sortConfig.direction === 'asc' 
-          ? dateA - dateB 
-          : dateB - dateA;
-      case 'amount':
-        return sortConfig.direction === 'asc' 
-          ? a.amount - b.amount 
-          : b.amount - a.amount;
-      case 'wallet':
-        return sortConfig.direction === 'asc'
-          ? a.wallet.localeCompare(b.wallet)
-          : b.wallet.localeCompare(a.wallet);
-      default:
-        return 0;
+  // Apply active filters
+  Object.entries(activeFilters).forEach(([field, filter]) => {
+    if (filter && filter.values && filter.values.length > 0) {
+      filteredTransactions = filteredTransactions.filter(t => {
+        if (field === 'dateRange') {
+          const [startDate, endDate] = filter.values[0].split(' to ');
+          const transactionDate = new Date(t.date);
+          return (
+            (!startDate || transactionDate >= new Date(startDate)) &&
+            (!endDate || transactionDate <= new Date(endDate))
+          );
+        }
+        return filter.values.includes(t[field]);
+      });
     }
+  });
+
+  // Apply sorting - now supports multiple sort criteria
+  const sortedTransactions = [...filteredTransactions].sort((a, b) => {
+    for (const sort of sortConfig) {
+      let comparison = 0;
+      
+      switch (sort.key) {
+        case 'date':
+          const dateA = new Date(a.date);
+          const dateB = new Date(b.date);
+          comparison = dateA - dateB;
+          break;
+        case 'amount':
+          comparison = a.amount - b.amount;
+          break;
+        case 'wallet':
+          comparison = a.wallet.localeCompare(b.wallet);
+          break;
+        default:
+          continue;
+      }
+
+      if (comparison !== 0) {
+        return sort.direction === 'asc' ? comparison : -comparison;
+      }
+    }
+    return 0;
   });
 
   // Pagination
@@ -875,6 +881,21 @@ const deleteTransaction = useCallback(async (transactionId) => {
     currentPage * 20
   );
   const totalPages = Math.ceil(sortedTransactions.length / 20);
+
+  // Get unique values for each filterable field
+  const filterOptions = {
+    type: Array.from(new Set(filteredData.transactions.map(t => t.type))),
+    category: Array.from(new Set(filteredData.transactions.map(t => t.category))),
+    wallet: Array.from(new Set(filteredData.transactions.map(t => t.wallet))),
+    dateRange: ['Last 7 days', 'Last 30 days', 'Last 90 days', 'This month', 'Last month']
+  };
+
+  // Helper to convert to title case
+  const toTitleCase = (str) => {
+    return str.replace(/\w\S*/g, (txt) => {
+      return txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase();
+    });
+  };
 
   return (
     <div className="bg-white rounded-lg shadow">
@@ -893,19 +914,51 @@ const deleteTransaction = useCallback(async (transactionId) => {
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
-                  setCurrentPage(1); // Reset to first page on new search
+                  setCurrentPage(1);
                 }}
               />
             </div>
             
-            {/* Filter Button */}
-            <button 
-              onClick={() => setShowFilters(!showFilters)}
-              className="p-2 border rounded-lg hover:bg-gray-50 flex items-center gap-2"
-            >
-              <Filter size={16} />
-              <span>Filters</span>
-            </button>
+            {/* Add Filter Button */}
+            <div className="relative">
+              <button 
+                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                className="p-2 border rounded-lg hover:bg-gray-50 flex items-center gap-2"
+              >
+                <Filter size={16} />
+                <span>Add Filter</span>
+              </button>
+              
+              {/* Filter Dropdown */}
+              {showFilterDropdown && (
+                <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-10 border">
+                  <div className="py-1">
+                    <div className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Filter by
+                    </div>
+                    {Object.keys(filterOptions).map(field => (
+                      <button
+                        key={field}
+                        onClick={() => {
+                          setSelectedFilterField(field);
+                          setShowFilterDropdown(false);
+                          setShowFilterOptions(true);
+                        }}
+                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                      >
+                        <div className="flex items-center gap-2">
+                          {field === 'type' && <Activity size={14} />}
+                          {field === 'category' && <Tag size={14} />}
+                          {field === 'wallet' && <Wallet size={14} />}
+                          {field === 'dateRange' && <Calendar size={14} />}
+                          {toTitleCase(field)}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
             
             {/* Add Transaction Button */}
             <button 
@@ -918,96 +971,157 @@ const deleteTransaction = useCallback(async (transactionId) => {
           </div>
         </div>
 
-        {/* Filters Panel */}
-        {showFilters && (
-          <div className="mt-4 p-4 bg-gray-50 rounded-lg">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {/* Type Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                <select
-                  value={activeFilter.type || ''}
-                  onChange={(e) => setActiveFilter(prev => ({
-                    ...prev,
-                    type: e.target.value || null
-                  }))}
-                  className="w-full p-2 border rounded"
+        {/* Active Filters */}
+        {Object.keys(activeFilters).filter(field => activeFilters[field]?.values?.length > 0).length > 0 && (
+          <div className="mt-4 flex flex-wrap gap-2">
+            {Object.entries(activeFilters).map(([field, filter]) => {
+              if (!filter?.values?.length) return null;
+              
+              return filter.values.map(value => (
+                <div 
+                  key={`${field}-${value}`}
+                  className="flex items-center gap-2 px-3 py-1 bg-blue-50 border border-blue-200 rounded-full"
                 >
-                  <option value="">All Types</option>
-                  <option value="inbound">Inbound</option>
-                  <option value="outbound">Outbound</option>
-                  <option value="transfer">Transfer</option>
-                </select>
-              </div>
-
-              {/* Category Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-                <select
-                  value={activeFilter.category || ''}
-                  onChange={(e) => setActiveFilter(prev => ({
-                    ...prev,
-                    category: e.target.value || null
-                  }))}
-                  className="w-full p-2 border rounded"
-                >
-                  <option value="">All Categories</option>
-                  {Array.from(
-                    new Set(filteredData.transactions.map(t => t.category))
-                  ).map(category => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Date Range Filter */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Date Range</label>
-                <div className="flex gap-2">
-                  <input
-                    type="date"
-                    value={activeFilter.dateRange?.[0] || ''}
-                    onChange={(e) => setActiveFilter(prev => ({
-                      ...prev,
-                      dateRange: [e.target.value, prev.dateRange?.[1] || null]
-                    }))}
-                    className="p-2 border rounded flex-1"
-                  />
-                  <span className="self-center">to</span>
-                  <input
-                    type="date"
-                    value={activeFilter.dateRange?.[1] || ''}
-                    onChange={(e) => setActiveFilter(prev => ({
-                      ...prev,
-                      dateRange: [prev.dateRange?.[0] || null, e.target.value]
-                    }))}
-                    className="p-2 border rounded flex-1"
-                  />
+                  <span className="text-sm text-blue-800">
+                    {toTitleCase(field)}: {toTitleCase(value)}
+                  </span>
+                  <button
+                    onClick={() => {
+                      setActiveFilters(prev => {
+                        const newValues = prev[field].values.filter(v => v !== value);
+                        if (newValues.length === 0) {
+                          const { [field]: _, ...rest } = prev;
+                          return rest;
+                        }
+                        return {
+                          ...prev,
+                          [field]: {
+                            ...prev[field],
+                            values: newValues
+                          }
+                        };
+                      });
+                    }}
+                    className="text-blue-500 hover:text-blue-700"
+                  >
+                    <X size={14} />
+                  </button>
                 </div>
-              </div>
-            </div>
-
-            {/* Clear Filters Button */}
-            <div className="mt-3 flex justify-end">
-              <button
-                onClick={() => {
-                  setActiveFilter({
-                    type: null,
-                    category: null,
-                    dateRange: null
-                  });
-                  setCurrentPage(1);
-                }}
-                className="text-sm text-blue-600 hover:text-blue-800"
-              >
-                Clear All Filters
-              </button>
-            </div>
+              ));
+            })}
+            <button
+              onClick={() => setActiveFilters({})}
+              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+            >
+              Clear all
+              <X size={14} />
+            </button>
           </div>
         )}
       </div>
+
+      {/* Filter Options Modal */}
+      {showFilterOptions && selectedFilterField && (
+        <div 
+          className="fixed inset-0 bg-black/30 bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowFilterOptions(false);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg p-6 w-full max-w-md"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-medium">
+                {toTitleCase(selectedFilterField)}
+              </h3>
+              <button 
+                onClick={() => setShowFilterOptions(false)}
+                className="text-gray-500 hover:text-gray-700"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="mb-6">
+              {selectedFilterField === 'dateRange' ? (
+                <div className="space-y-2">
+                  {filterOptions.dateRange.map(option => (
+                    <div key={option} className="flex items-center">
+                      <input
+                        type="radio"
+                        id={option}
+                        checked={activeFilters.dateRange?.values?.includes(option) || false}
+                        onChange={() => {
+                          setActiveFilters(prev => ({
+                            ...prev,
+                            dateRange: {
+                              values: [option]
+                            }
+                          }));
+                        }}
+                        className="mr-2"
+                      />
+                      <label htmlFor={option}>{option}</label>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {filterOptions[selectedFilterField].map(option => (
+                    <div key={option} className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id={option}
+                        checked={activeFilters[selectedFilterField]?.values?.includes(option) || false}
+                        onChange={() => {
+                          const currentValues = activeFilters[selectedFilterField]?.values || [];
+                          const newValues = currentValues.includes(option)
+                            ? currentValues.filter(v => v !== option)
+                            : [...currentValues, option];
+                          
+                          setActiveFilters(prev => ({
+                            ...prev,
+                            [selectedFilterField]: {
+                              values: newValues
+                            }
+                          }));
+                        }}
+                        className="mr-2"
+                      />
+                      <label htmlFor={option}>{toTitleCase(option)}</label>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => {
+                  setActiveFilters(prev => {
+                    const { [selectedFilterField]: _, ...rest } = prev;
+                    return rest;
+                  });
+                  setShowFilterOptions(false);
+                }}
+                className="px-4 py-2 border rounded hover:bg-gray-50"
+              >
+                Clear
+              </button>
+              <button
+                onClick={() => setShowFilterOptions(false)}
+                className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Table Header with Sortable Columns */}
       <div className="overflow-x-auto">
@@ -1015,122 +1129,148 @@ const deleteTransaction = useCallback(async (transactionId) => {
           <thead className="bg-gray-50">
             <tr>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider cursor-pointer"
+                className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                 onClick={() => handleSort('date')}
               >
                 <div className="flex items-center">
+                  <Calendar size={14} className="mr-2" />
                   Date
-                  {sortConfig.key === 'date' && (
-                    <span className="ml-1">
-                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                  {sortConfig.some(s => s.key === 'date') && (
+                    <span className="ml-1 text-blue-500">
+                      {sortConfig.find(s => s.key === 'date')?.direction === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </div>
               </th>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider cursor-pointer"
+                className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                 onClick={() => handleSort('wallet')}
               >
                 <div className="flex items-center">
+                  <Wallet size={14} className="mr-2" />
                   Wallet
-                  {sortConfig.key === 'wallet' && (
-                    <span className="ml-1">
-                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                  {sortConfig.some(s => s.key === 'wallet') && (
+                    <span className="ml-1 text-blue-500">
+                      {sortConfig.find(s => s.key === 'wallet')?.direction === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </div>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Article
+                <div className="flex items-center">
+                  <FileText size={14} className="mr-2" />
+                  Article
+                </div>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Type
+                <div className="flex items-center">
+                  <Activity size={14} className="mr-2" />
+                  Type
+                </div>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Category
+                <div className="flex items-center">
+                  <Tag size={14} className="mr-2" />
+                  Category
+                </div>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Payee/Lender
+                <div className="flex items-center">
+                  <User size={14} className="mr-2" />
+                  Payee/Lender
+                </div>
               </th>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider cursor-pointer"
+                className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider cursor-pointer hover:bg-gray-100"
                 onClick={() => handleSort('amount')}
               >
                 <div className="flex items-center">
+                  <DollarSign size={14} className="mr-2" />
                   Amount
-                  {sortConfig.key === 'amount' && (
-                    <span className="ml-1">
-                      {sortConfig.direction === 'asc' ? '↑' : '↓'}
+                  {sortConfig.some(s => s.key === 'amount') && (
+                    <span className="ml-1 text-blue-500">
+                      {sortConfig.find(s => s.key === 'amount')?.direction === 'asc' ? '↑' : '↓'}
                     </span>
                   )}
                 </div>
               </th>
               <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
-                Actions
+                <div className="flex items-center">
+                  <Settings size={14} className="mr-2" />
+                  Actions
+                </div>
               </th>
             </tr>
           </thead>
           
           {/* Table Body */}
           <tbody className="bg-white divide-y divide-gray-200">
-            {paginatedTransactions.map(transaction => (
-              <tr key={transaction.id}>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                  {formatDate(transaction.date)}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                  {transaction.wallet}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                  {transaction.article || '-'}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                  <div className="flex items-center justify-center">
-                    {getTypeIcon(transaction.type)}
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                  {transaction.category === 'Transfer Out' 
-                    ? `Transfer to ${transaction.targetWallet || 'Unknown'}`
-                    : transaction.category === 'Transfer In'
-                      ? `Transfer from ${transactions.find(t => 
-                          t.date === transaction.date && 
-                          Math.abs(t.amount - transaction.amount) <= (t.transferFee || 0) &&
-                          t.category === 'Transfer Out'
-                        )?.wallet || 'Unknown'}`
-                      : transaction.category}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                  {transaction.category === 'Loan' 
-                    ? transaction.payee || transaction.member 
-                    : transaction.payee || '-'}
-                </td>
-                <td className={`px-6 py-4 whitespace-nowrap text-sm text-black font-medium ${
-                  transaction.type === 'inbound' ? 'text-green-600' : 'text-red-600'
-                }`}>
-                  {transaction.type === 'inbound' ? '+' : '-'}₱{transaction.amount.toLocaleString()}
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
-                  <div className="flex space-x-2">
-                    <button 
-                      onClick={() => {
-                        setEditingTransaction(transaction);
-                        setShowAddTransactionModal(true);
-                      }}
-                      className="text-blue-600 hover:text-blue-800"
-                    >
-                      <Edit size={16} />
-                    </button>
-                    <button 
-                      onClick={() => confirmDelete(transaction)}
-                      className="text-red-600 hover:text-red-800"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </div>
+            {paginatedTransactions.length > 0 ? (
+              paginatedTransactions.map(transaction => (
+                <tr key={transaction.id}>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                    {formatDate(transaction.date)}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                    {transaction.wallet}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                    {transaction.article || '-'}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                    <div className="flex items-center justify-center">
+                      {getTypeIcon(transaction.type)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                    {transaction.category === 'Transfer Out' 
+                      ? `Transfer to ${transaction.targetWallet || 'Unknown'}`
+                      : transaction.category === 'Transfer In'
+                        ? `Transfer from ${transactions.find(t => 
+                            t.date === transaction.date && 
+                            Math.abs(t.amount - transaction.amount) <= (t.transferFee || 0) &&
+                            t.category === 'Transfer Out'
+                          )?.wallet || 'Unknown'}`
+                        : transaction.category}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                    {transaction.category === 'Loan' 
+                      ? transaction.payee || transaction.member 
+                      : transaction.payee || '-'}
+                  </td>
+                  <td className={`px-6 py-4 whitespace-nowrap text-sm text-black font-medium ${
+                    transaction.type === 'inbound' ? 'text-green-600' : 'text-red-600'
+                  }`}>
+                    {transaction.type === 'inbound' ? '+' : '-'}₱{transaction.amount.toLocaleString()}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={() => {
+                          setEditingTransaction(transaction);
+                          setShowAddTransactionModal(true);
+                        }}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        <Edit size={16} />
+                      </button>
+                      <button 
+                        onClick={() => confirmDelete(transaction)}
+                        className="text-red-600 hover:text-red-800"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
+                  No transactions found matching your criteria
                 </td>
               </tr>
-            ))}
+            )}
           </tbody>
         </table>
       </div>
@@ -1145,7 +1285,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
             <button 
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 border rounded disabled:opacity-50"
+              className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
             >
               Previous
             </button>
@@ -1167,7 +1307,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`px-3 py-1 mx-1 rounded ${currentPage === pageNum ? 'bg-blue-500 text-white' : 'border'}`}
+                    className={`px-3 py-1 mx-1 rounded ${currentPage === pageNum ? 'bg-blue-500 text-white' : 'border hover:bg-gray-50'}`}
                   >
                     {pageNum}
                   </button>
@@ -1178,7 +1318,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
                   <span className="mx-1">...</span>
                   <button
                     onClick={() => setCurrentPage(totalPages)}
-                    className="px-3 py-1 border rounded"
+                    className="px-3 py-1 border rounded hover:bg-gray-50"
                   >
                     {totalPages}
                   </button>
@@ -1188,7 +1328,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
             <button 
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded disabled:opacity-50"
+              className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
             >
               Next
             </button>
@@ -1201,16 +1341,19 @@ const deleteTransaction = useCallback(async (transactionId) => {
   filteredData.transactions, 
   searchTerm, 
   currentPage, 
-  activeFilter,
+  activeFilters,
   sortConfig,
-  showFilters,
+  showFilterDropdown,
+  showFilterOptions,
+  selectedFilterField,
   setSearchTerm, 
   setShowAddTransactionModal, 
   setEditingTransaction, 
   confirmDelete, 
   formatDate, 
   getTypeIcon,
-  transactions
+  transactions,
+  handleSort
 ]);
 
   const renderContent = useCallback(() => {

@@ -262,6 +262,7 @@ export const AddTransactionModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
   const [customCategory, setCustomCategory] = useState('');
+  
 
   // Get category options based on transaction type
   const getCategoryOptions = (type) => {
