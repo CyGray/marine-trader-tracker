@@ -1,6 +1,8 @@
 'use client'
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
+import { Check, Plus, X } from 'lucide-react';
+
 const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
 export const AddWalletModal = ({ onClose, onSave, members }) => {
@@ -197,6 +199,40 @@ export const AddInvestmentModal = ({ onClose, onSave, members }) => {
   );
 };
 
+// Custom hook for localStorage persistence
+const useLocalStorageCategories = () => {
+  const [categories, setCategories] = useState(() => {
+    if (typeof window === 'undefined') return {};
+    
+    try {
+      const stored = window.localStorage.getItem('transactionCategories');
+      return stored ? JSON.parse(stored) : {
+        inbound: ['Capital In', 'Repayment', 'Sell Crypto', 'Close Trade'],
+        outbound: ['Capital Out', 'Loan', 'Materials', 'Buy Crypto', 'Open Trade'],
+        transfer: ['Transfer Out']
+      };
+    } catch (error) {
+      console.error('Failed to parse categories', error);
+      return {
+        inbound: ['Capital In', 'Repayment', 'Sell Crypto', 'Close Trade'],
+        outbound: ['Capital Out', 'Loan', 'Materials', 'Buy Crypto', 'Open Trade'],
+        transfer: ['Transfer Out']
+      };
+    }
+  });
+
+  const saveCategories = (newCategories) => {
+    try {
+      window.localStorage.setItem('transactionCategories', JSON.stringify(newCategories));
+      setCategories(newCategories);
+    } catch (error) {
+      console.error('Failed to save categories', error);
+    }
+  };
+
+  return { categories, saveCategories };
+};
+
 export const AddTransactionModal = ({ 
   onClose, 
   onSave, 
@@ -207,6 +243,7 @@ export const AddTransactionModal = ({
   onUpdateWallet,
   onUpdateInvestment
 }) => {
+  const { categories, saveCategories } = useLocalStorageCategories();
   const [transactionData, setTransactionData] = useState({
     wallet: '',
     investment: '',
@@ -225,44 +262,21 @@ export const AddTransactionModal = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCustomCategoryInput, setShowCustomCategoryInput] = useState(false);
   const [customCategory, setCustomCategory] = useState('');
-  const [customCategoryType, setCustomCategoryType] = useState('inbound');
 
-  // Define category options based on transaction type
+  // Get category options based on transaction type
   const getCategoryOptions = (type) => {
     const baseOptions = [
       { value: '', label: 'Select Category' },
       { value: 'Custom', label: '+ Add Custom Category' }
     ];
 
-    const inboundOptions = [
-      { value: 'Capital In', label: 'Capital In' },
-      { value: 'Repayment', label: 'Repayment' },
-      { value: 'Sell Crypto', label: 'Sell Crypto' },
-      { value: 'Close Trade', label: 'Close Trade' }
-    ];
+    const typeCategories = categories[type] || [];
+    const categoryOptions = typeCategories.map(category => ({
+      value: category,
+      label: category
+    }));
 
-    const outboundOptions = [
-      { value: 'Capital Out', label: 'Capital Out' },
-      { value: 'Loan', label: 'Loan' },
-      { value: 'Materials', label: 'Materials' },
-      { value: 'Buy Crypto', label: 'Buy Crypto' },
-      { value: 'Open Trade', label: 'Open Trade' }
-    ];
-
-    const transferOptions = [
-      { value: 'Transfer Out', label: 'Transfer Out' }
-    ];
-
-    switch (type) {
-      case 'inbound':
-        return [...baseOptions, ...inboundOptions];
-      case 'outbound':
-        return [...baseOptions, ...outboundOptions];
-      case 'transfer':
-        return [...baseOptions, ...transferOptions];
-      default:
-        return baseOptions;
-    }
+    return [...baseOptions, ...categoryOptions];
   };
 
   const [categoryOptions, setCategoryOptions] = useState(getCategoryOptions('inbound'));
@@ -290,10 +304,10 @@ export const AddTransactionModal = ({
     setCategoryOptions(getCategoryOptions(transactionData.type));
     
     // Reset category if it's not valid for the new type
-    if (transactionData.category && !getCategoryOptions(transactionData.type).some(opt => opt.value === transactionData.category)) {
+    if (transactionData.category && !categories[transactionData.type]?.includes(transactionData.category)) {
       setTransactionData(prev => ({ ...prev, category: '' }));
     }
-  }, [transactionData.type]);
+  }, [transactionData.type, categories]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -324,19 +338,17 @@ export const AddTransactionModal = ({
       return;
     }
 
-    // Add the new category to the appropriate options
-    const newCategory = {
-      value: customCategory,
-      label: customCategory
+    // Add the new category to the appropriate type
+    const newCategories = {
+      ...categories,
+      [transactionData.type]: [...(categories[transactionData.type] || []), customCategory]
     };
 
-    const updatedOptions = [
-      ...getCategoryOptions(customCategoryType).filter(opt => opt.value !== 'Custom'),
-      newCategory,
-      { value: 'Custom', label: '+ Add Custom Category' }
-    ];
+    // Save to localStorage
+    saveCategories(newCategories);
 
-    setCategoryOptions(updatedOptions);
+    // Update the dropdown options
+    setCategoryOptions(getCategoryOptions(transactionData.type));
     setTransactionData(prev => ({ ...prev, category: customCategory }));
     setShowCustomCategoryInput(false);
     setCustomCategory('');
@@ -403,10 +415,10 @@ export const AddTransactionModal = ({
           </h2>
           <button 
             onClick={onClose} 
-            className="text-gray-500 hover:text-gray-700 text-2xl"
+            className="text-gray-500 hover:text-gray-700"
             disabled={isSubmitting}
           >
-            &times;
+            <X size={24} />
           </button>
         </div>
 
@@ -542,71 +554,62 @@ export const AddTransactionModal = ({
                 </select>
               </div>
 
-              {/* Category - Hidden for transfers */}
-              {/* Category selection */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Category
-              </label>
-              <select
-                name="category"
-                value={transactionData.category}
-                onChange={handleChange}
-                className="w-full p-2 border rounded"
-                required
-              >
-                {categoryOptions.map(option => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            </div>
+              {/* Category */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <select
+                  name="category"
+                  value={transactionData.category}
+                  onChange={handleChange}
+                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  required
+                  disabled={isSubmitting}
+                >
+                  {categoryOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            {/* Custom category input */}
-            {showCustomCategoryInput && (
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="mb-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    New Category Name
-                  </label>
-                  <input
-                    type="text"
-                    value={customCategory}
-                    onChange={(e) => setCustomCategory(e.target.value)}
-                    className="w-full p-2 border rounded"
-                    placeholder="Enter category name"
-                  />
-                </div>
-                <div className="mb-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Category Type
-                  </label>
-                  <div className="flex space-x-4">
-                    {['inbound', 'outbound'].map(type => (
-                      <label key={type} className="flex items-center">
-                        <input
-                          type="radio"
-                          name="customCategoryType"
-                          value={type}
-                          checked={customCategoryType === type}
-                          onChange={() => setCustomCategoryType(type)}
-                          className="mr-2"
-                        />
-                        <span className="capitalize">{type}</span>
-                      </label>
-                    ))}
+              {/* Custom category input */}
+              {showCustomCategoryInput && (
+                <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      New Category Name
+                    </label>
+                    <input
+                      type="text"
+                      value={customCategory}
+                      onChange={(e) => setCustomCategory(e.target.value)}
+                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      placeholder="Enter category name"
+                    />
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowCustomCategoryInput(false);
+                        setCustomCategory('');
+                      }}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddCustomCategory}
+                      className="px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Plus size={16} className="inline mr-1" />
+                      Add Category
+                    </button>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleAddCustomCategory}
-                  className="bg-blue-500 text-white px-3 py-1 rounded hover:bg-blue-600"
-                >
-                  Add Category
-                </button>
-              </div>
-            )}
+              )}
 
               {/* Article */}
               <div>
@@ -684,7 +687,15 @@ export const AddTransactionModal = ({
               className="px-6 py-3 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
               disabled={isSubmitting}
             >
-              {isSubmitting ? 'Processing...' : transaction ? 'Update' : 'Add'} Transaction
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Processing...
+                </>
+              ) : transaction ? 'Update Transaction' : 'Add Transaction'}
             </button>
           </div>
         </form>

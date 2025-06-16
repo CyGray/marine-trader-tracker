@@ -19,3 +19,4 @@ export const getTypeIcon = (type) => {
         return <Circle size={16} />;
     }
   };
+  
