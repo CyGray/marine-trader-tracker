@@ -1,24 +1,30 @@
+// @/app/page.tsx
 'use client'
 
 import MarineTraderTracker from "@/app/MarineTraderTracker";
 import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 import { useEffect, useState } from 'react';
 import { User } from 'firebase/auth';
 import { auth } from '../lib/firebaseConfig';
 
 export default function Home() {
   const [user, setUser] = useState<User | null>(null);
+  
   useEffect(() => {
-  const unsubscribe = auth.onAuthStateChanged((user) => {
-    setUser(user);
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setUser(user);
     });
     return () => unsubscribe();
   }, []);
   
   return (
-    <>
+    <div className="min-h-screen flex flex-col">
       <Navbar />
-      <MarineTraderTracker />
-    </>
+      <main className="flex-grow">
+        <MarineTraderTracker />
+      </main>
+      <Footer />
+    </div>
   );
 }
