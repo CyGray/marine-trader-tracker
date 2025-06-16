@@ -14,7 +14,7 @@ export const transactionTypes = ['inbound', 'outbound', 'transfer'];
   export const initialWallets = [
     { id: generateId(), name: 'Kyle GCash', type: 'GCash', balance: 45000, memberInCharge: 'Kyle Yuan Uy' },
     { id: generateId(), name: 'Kyle Onhand', type: 'GCash', balance: 45000, memberInCharge: 'Kyle Yuan Uy' },
-    { id: generateId(), name: 'Kyle Bybit', type: 'ByBit', balance: 45000, memberInCharge: 'Kyle Yuan Uy' },
+    { id: generateId(), name: 'Kyle Bybit', type: 'Crypto', balance: 45000, memberInCharge: 'Kyle Yuan Uy' },
     { id: generateId(), name: 'Yong GCash', type: 'GCash', balance: 80000, memberInCharge: 'Louis Uy' },
     { id: generateId(), name: 'Yong Onhand', type: 'On-hand', balance: 80000, memberInCharge: 'Louis Uy' },
     { id: generateId(), name: 'Fritz Onhand', type: 'On-hand', balance: 25000, memberInCharge: 'Fritz Gioranz Tayo' },
@@ -110,3 +110,10 @@ export const transactionTypes = ['inbound', 'outbound', 'transfer'];
         status: 'pending' 
       }
     ]
+
+
+  export const memberColors = {
+      'Fritz Gioranz Tayo': 'bg-blue-500',
+      'Kyle Yuan Uy': 'bg-teal-500', // blue-green
+      'Louis Uy': 'bg-sky-500' // sky-blue
+    };

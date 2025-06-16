@@ -24,6 +24,7 @@ import {
 
 import { formatDate, getTypeIcon } from "../util/Helpers";
 import { memberColors, members } from "../util/Constants";
+import WalletCard from "@/components/WalletCard";
 
 // Custom hook for localStorage persistence
 const useLocalStorage = (key, initialValue) => {
@@ -601,54 +602,27 @@ const deleteTransaction = useCallback(async (transactionId) => {
 
   const renderWallets = useCallback(() => (
   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-    {filteredData.wallets.map(wallet => {
-      const memberColor = memberColors[wallet.memberInCharge] || 'bg-gray-500';
-      return (
-        <div 
-          key={wallet.id} 
-          className="bg-white rounded-lg shadow p-6 relative group hover:shadow-lg transition-shadow"
-        >
-          {/* Edit/Delete buttons - visible on hover (desktop) and always on mobile */}
-          <div className="absolute top-2 right-2 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex space-x-1">
-            <button 
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent event from reaching parent
-                setEditingWallet(wallet);
-                setShowEditWalletModal(true);
-              }}
-              className="p-1 bg-blue-100 text-blue-600 rounded hover:bg-blue-200"
-              title="Edit wallet"
-            >
-              <Edit size={16} />
-            </button>
-            <button 
-              onClick={(e) => {
-                e.stopPropagation(); // Prevent event from reaching parent
-                setWalletToDelete(wallet);
-                setShowDeleteWalletModal(true);
-              }}
-              className="p-1 bg-red-100 text-red-600 rounded hover:bg-red-200"
-              title="Delete wallet"
-            >
-              <Trash2 size={16} />
-            </button>
-          </div>
-          
-          {/* Wallet content */}
-          <div className={`w-12 h-12 rounded-lg ${memberColor} flex items-center justify-center mb-4`}>
-            <Wallet className="text-white" size={24} />
-          </div>
-          <h3 className="font-semibold text-lg text-black mb-2">{wallet.name}</h3>
-          <p className="text-2xl font-bold mb-2">₱{wallet.balance.toLocaleString()}</p>
-          <p className="text-sm text-black mb-1">{wallet.memberInCharge}</p>
-          <p className="text-xs text-black">{wallet.type}</p>
-        </div>
-      );
-    })}
+    {filteredData.wallets.map(wallet => (
+      <WalletCard
+        key={wallet.id}
+        wallet={wallet}
+        onClick={() => {
+          // Optional: Add click handler if needed
+        }}
+        onEdit={() => {
+          setEditingWallet(wallet);
+          setShowEditWalletModal(true);
+        }}
+        onDelete={() => {
+          setWalletToDelete(wallet);
+          setShowDeleteWalletModal(true);
+        }}
+      />
+    ))}
     {/* Add Wallet button */}
     <div 
       onClick={() => setShowAddWalletModal(true)}
-      className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors"
+      className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors h-48"
     >
       <Plus className="text-black mb-2" size={32} />
       <p className="text-black">Add Wallet</p>
