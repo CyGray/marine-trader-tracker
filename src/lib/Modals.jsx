@@ -33,26 +33,26 @@ export const AddWalletModal = ({ onClose, onSave, members }) => {
   return (
     <div 
       className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50"
-      onMouseDown={onClose} // Changed to onMouseDown
+      onMouseDown={onClose}
     >
       <div 
-        className="bg-white rounded-lg p-6 w-96"
-        onMouseDown={(e) => e.stopPropagation()} // Changed to onMouseDown
+        className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96"
+        onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold mb-4 text-black">Add New Wallet</h2>
+        <h2 className="text-xl font-bold mb-4 text-black dark:text-white">Add New Wallet</h2>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <input
               type="text"
               name="name"
               placeholder="Wallet Name"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={walletData.name}
               onChange={handleChange}
             />
             <select
               name="type"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={walletData.type}
               onChange={handleChange}
             >
@@ -64,7 +64,7 @@ export const AddWalletModal = ({ onClose, onSave, members }) => {
             </select>
             <select
               name="memberInCharge"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={walletData.memberInCharge}
               onChange={handleChange}
             >
@@ -77,7 +77,7 @@ export const AddWalletModal = ({ onClose, onSave, members }) => {
               type="number"
               name="balance"
               placeholder="Initial Balance"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={walletData.balance}
               onChange={handleChange}
               min="0"
@@ -87,13 +87,13 @@ export const AddWalletModal = ({ onClose, onSave, members }) => {
             <button 
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-black hover:bg-gray-100 rounded"
+              className="px-4 py-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
             >
               Cancel
             </button>
             <button 
               type="submit"
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700"
             >
               Add Wallet
             </button>
@@ -135,23 +135,23 @@ export const AddInvestmentModal = ({ onClose, onSave, members }) => {
       onMouseDown={onClose}
     >
       <div 
-        className="bg-white rounded-lg p-6 w-96"
+        className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold mb-4 text-black">Add New Investment</h2>
+        <h2 className="text-xl font-bold mb-4 text-black dark:text-white">Add New Investment</h2>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <input
               type="text"
               name="name"
               placeholder="Investment Name"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={investmentData.name}
               onChange={handleChange}
             />
             <select
               name="memberInCharge"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={investmentData.memberInCharge}
               onChange={handleChange}
             >
@@ -164,7 +164,7 @@ export const AddInvestmentModal = ({ onClose, onSave, members }) => {
               type="number"
               name="value"
               placeholder="Initial Value"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={investmentData.value}
               onChange={handleChange}
               min="0"
@@ -173,7 +173,7 @@ export const AddInvestmentModal = ({ onClose, onSave, members }) => {
               type="number"
               name="pnl"
               placeholder="Initial P&L"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={investmentData.pnl}
               onChange={handleChange}
             />
@@ -182,13 +182,13 @@ export const AddInvestmentModal = ({ onClose, onSave, members }) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-black hover:bg-gray-100 rounded"
+              className="px-4 py-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700"
             >
               Add Investment
             </button>
@@ -381,6 +381,8 @@ export const AddTransactionModal = ({
       if (investment) {
         const change = transactionData.type === 'inbound' ? transactionData.amount : -transactionData.amount;
         if (investment.value + change < 0) return 'This would result in negative investment value';
+      } else {
+        return 'Selected investment not found';
       }
     }
 
@@ -407,16 +409,16 @@ export const AddTransactionModal = ({
       onMouseDown={onClose}
     >
       <div 
-        className="bg-white rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-2xl font-bold text-gray-900">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
             {transaction ? 'Edit Transaction' : 'Add New Transaction'}
           </h2>
           <button 
             onClick={onClose} 
-            className="text-gray-500 hover:text-gray-700"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
             disabled={isSubmitting}
           >
             <X size={24} />
@@ -424,7 +426,7 @@ export const AddTransactionModal = ({
         </div>
 
         {validationError && (
-          <div className="mb-6 p-3 bg-red-100 text-red-700 rounded-lg">
+          <div className="mb-6 p-3 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded-lg">
             {validationError}
           </div>
         )}
@@ -435,12 +437,12 @@ export const AddTransactionModal = ({
             <div className="space-y-6">
               {/* Transaction Type */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
                 <select
                   name="type"
                   value={transactionData.type}
                   onChange={handleChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   disabled={isSubmitting}
                 >
                   <option value="inbound">Inbound</option>
@@ -451,14 +453,14 @@ export const AddTransactionModal = ({
 
               {/* Source Wallet */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   {transactionData.type === 'transfer' ? 'From Wallet' : 'Wallet'}
                 </label>
                 <select
                   name="wallet"
                   value={transactionData.wallet}
                   onChange={handleChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   required
                   disabled={isSubmitting}
                 >
@@ -470,17 +472,32 @@ export const AddTransactionModal = ({
                   ))}
                 </select>
               </div>
+              
+              {transactionData.wallet && (
+                <div className="p-3 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <p className="text-sm text-gray-700 dark:text-gray-300">
+                    Member: <span className="font-medium">
+                      {wallets.find(w => w.name === transactionData.wallet)?.memberInCharge || 'Unknown'}
+                    </span>
+                  </p>
+                  {!wallets.find(w => w.name === transactionData.wallet)?.memberInCharge && (
+                    <p className="text-sm text-red-500 dark:text-red-400 mt-1">
+                      Warning: Selected wallet has no member assigned
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Target Wallet (for transfers) */}
               {transactionData.type === 'transfer' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">To Wallet</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">To Wallet</label>
                     <select
                       name="targetWallet"
                       value={transactionData.targetWallet}
                       onChange={handleChange}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                       required
                       disabled={isSubmitting}
                     >
@@ -496,7 +513,7 @@ export const AddTransactionModal = ({
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Transfer Fee</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Transfer Fee</label>
                     <input
                       type="number"
                       name="transferFee"
@@ -504,13 +521,13 @@ export const AddTransactionModal = ({
                       step="0.01"
                       value={transactionData.transferFee}
                       onChange={handleChange}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                       disabled={isSubmitting}
                     />
                   </div>
 
-                  <div className="p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm font-medium text-blue-700">
+                  <div className="p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                    <p className="text-sm font-medium text-blue-700 dark:text-blue-400">
                       Net Amount: ₱{(transactionData.amount - transactionData.transferFee).toLocaleString()}
                     </p>
                   </div>
@@ -519,7 +536,7 @@ export const AddTransactionModal = ({
 
               {/* Amount */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Amount</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount</label>
                 <input
                   type="number"
                   name="amount"
@@ -527,7 +544,7 @@ export const AddTransactionModal = ({
                   step="0.01"
                   value={transactionData.amount}
                   onChange={handleChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   required
                   disabled={isSubmitting}
                 />
@@ -538,31 +555,47 @@ export const AddTransactionModal = ({
             <div className="space-y-6">
               {/* Investment (optional) */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Investment (optional)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Investment (optional)</label>
                 <select
                   name="investment"
                   value={transactionData.investment}
                   onChange={handleChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   disabled={isSubmitting}
                 >
                   <option value="">Select Investment</option>
                   {investments.map(investment => (
                     <option key={investment.id} value={investment.name}>
-                      {investment.name}
+                      {investment.name} (₱{investment.value.toLocaleString()})
                     </option>
                   ))}
                 </select>
+                {transactionData.investment && (
+                  <div className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                    Current value: ₱{
+                      investments.find(i => i.name === transactionData.investment)?.value.toLocaleString() || '0'
+                    }
+                    {transactionData.amount > 0 && (
+                      <span className="ml-2">
+                        New value: ₱{
+                          (investments.find(i => i.name === transactionData.investment)?.value + 
+                          (transactionData.type === 'inbound' ? transactionData.amount : -transactionData.amount))
+                          .toLocaleString()
+                        }
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Category */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Category</label>
                 <select
                   name="category"
                   value={transactionData.category}
                   onChange={handleChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   required
                   disabled={isSubmitting}
                 >
@@ -576,16 +609,16 @@ export const AddTransactionModal = ({
 
               {/* Custom category input */}
               {showCustomCategoryInput && (
-                <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+                <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg space-y-3">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                       New Category Name
                     </label>
                     <input
                       type="text"
                       value={customCategory}
                       onChange={(e) => setCustomCategory(e.target.value)}
-                      className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-600 dark:text-white"
                       placeholder="Enter category name"
                     />
                   </div>
@@ -596,7 +629,7 @@ export const AddTransactionModal = ({
                         setShowCustomCategoryInput(false);
                         setCustomCategory('');
                       }}
-                      className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                      className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-600 hover:bg-gray-50 dark:hover:bg-gray-500"
                     >
                       Cancel
                     </button>
@@ -614,13 +647,13 @@ export const AddTransactionModal = ({
 
               {/* Article */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Article/Description</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Article/Description</label>
                 <input
                   type="text"
                   name="article"
                   value={transactionData.article}
                   onChange={handleChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                   disabled={isSubmitting}
                 />
               </div>
@@ -628,7 +661,7 @@ export const AddTransactionModal = ({
               {/* Payee - Hidden for transfers */}
               {transactionData.type !== 'transfer' && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     {transactionData.type === 'inbound' ? 'From' : 'To'} (Payee)
                   </label>
                   <input
@@ -636,7 +669,7 @@ export const AddTransactionModal = ({
                     name="payee"
                     value={transactionData.payee}
                     onChange={handleChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                     disabled={isSubmitting}
                   />
                 </div>
@@ -649,23 +682,23 @@ export const AddTransactionModal = ({
                   id="useCustomDate"
                   checked={useCustomDate}
                   onChange={() => setUseCustomDate(!useCustomDate)}
-                  className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  className="h-5 w-5 rounded border-gray-300 text-blue-600 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700"
                   disabled={isSubmitting}
                 />
-                <label htmlFor="useCustomDate" className="text-sm font-medium text-gray-700">
+                <label htmlFor="useCustomDate" className="text-sm font-medium text-gray-700 dark:text-gray-300">
                   Use custom date
                 </label>
               </div>
 
               {useCustomDate && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Date</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Date</label>
                   <input
                     type="date"
                     name="date"
                     value={transactionData.date}
                     onChange={handleChange}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                     required
                     disabled={isSubmitting}
                   />
@@ -678,7 +711,7 @@ export const AddTransactionModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-6 py-3 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="px-6 py-3 border border-gray-300 dark:border-gray-600 rounded-lg shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
               disabled={isSubmitting}
             >
               Cancel
@@ -709,11 +742,11 @@ export const CompletePaymentModal = ({ payment, onClose, onComplete, wallets, on
   const [completionDate, setCompletionDate] = useState(new Date().toISOString().slice(0, 16));
   
   // Find the wallet
-    const wallet = wallets.find(w => w.name === payment.wallet);
-    if (!wallet) {
-        alert('Wallet not found');
-        return;
-    }
+  const wallet = wallets.find(w => w.name === payment.wallet);
+  if (!wallet) {
+      alert('Wallet not found');
+      return;
+  }
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -724,18 +757,18 @@ export const CompletePaymentModal = ({ payment, onClose, onComplete, wallets, on
       wallet: payment.wallet,
       investment: null,
       amount: payment.amount,
-      type: 'inbound', // Changed to inbound
-      category: 'Repayment', // Changed to Repayment
+      type: 'inbound',
+      category: 'Repayment',
       date: completionDate.split('T')[0],
       member: payment.lender,
       payee: payment.payee,
-      article: `Loan repayment from ${payment.payee}` // Added article description
+      article: `Loan repayment from ${payment.payee}`
     };
 
     // Update wallet balance
     const updatedWallet = {
       ...wallet,
-      balance: wallet.balance + payment.amount // Add repayment amount to balance
+      balance: wallet.balance + payment.amount
     };
 
     // Call the update handler
@@ -751,25 +784,25 @@ export const CompletePaymentModal = ({ payment, onClose, onComplete, wallets, on
       onMouseDown={onClose}
     >
       <div 
-        className="bg-white rounded-lg p-6 w-96"
+        className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <h2 className="text-xl font-bold mb-4 text-black">Complete Payment</h2>
+        <h2 className="text-xl font-bold mb-4 text-black dark:text-white">Complete Payment</h2>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <div>
-              <p className="text-sm text-gray-600 mb-1">Payee: {payment?.payee}</p>
-              <p className="text-sm text-gray-600 mb-1">Amount: ₱{payment?.amount.toLocaleString()}</p>
-              <p className="text-sm text-gray-600 mb-1">Type: <span className="text-green-500">Inbound Repayment</span></p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Payee: {payment?.payee}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Amount: ₱{payment?.amount.toLocaleString()}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Type: <span className="text-green-500 dark:text-green-400">Inbound Repayment</span></p>
             </div>
             
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Completion Date & Time</label>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Completion Date & Time</label>
               <input
                 type="datetime-local"
                 value={completionDate}
                 onChange={(e) => setCompletionDate(e.target.value)}
-                className="w-full p-2 border rounded"
+                className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                 required
               />
             </div>
@@ -778,13 +811,13 @@ export const CompletePaymentModal = ({ payment, onClose, onComplete, wallets, on
             <button 
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-black hover:bg-gray-100 rounded"
+              className="px-4 py-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
             >
               Cancel
             </button>
             <button 
               type="submit"
-              className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
+              className="px-4 py-2 bg-green-500 dark:bg-green-600 text-white rounded hover:bg-green-600 dark:hover:bg-green-700"
             >
               Confirm Repayment
             </button>
@@ -795,7 +828,6 @@ export const CompletePaymentModal = ({ payment, onClose, onComplete, wallets, on
   );
 };
 
-// Add this to your Modals.jsx
 export const EditWalletModal = ({ wallet, onClose, onSave, members }) => {
   const [walletData, setWalletData] = useState(wallet);
 
@@ -815,21 +847,21 @@ export const EditWalletModal = ({ wallet, onClose, onSave, members }) => {
 
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onMouseDown={onClose}>
-      <div className="bg-white rounded-lg p-6 w-96" onMouseDown={(e) => e.stopPropagation()}>
-        <h2 className="text-xl font-bold mb-4 text-black">Edit Wallet</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96" onMouseDown={(e) => e.stopPropagation()}>
+        <h2 className="text-xl font-bold mb-4 text-black dark:text-white">Edit Wallet</h2>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <input
               type="text"
               name="name"
               placeholder="Wallet Name"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={walletData.name}
               onChange={handleChange}
             />
             <select
               name="type"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={walletData.type}
               onChange={handleChange}
             >
@@ -842,7 +874,7 @@ export const EditWalletModal = ({ wallet, onClose, onSave, members }) => {
               type="number"
               name="balance"
               placeholder="Balance"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={walletData.balance}
               onChange={handleChange}
               min="0"
@@ -852,13 +884,13 @@ export const EditWalletModal = ({ wallet, onClose, onSave, members }) => {
             <button 
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-black hover:bg-gray-100 rounded"
+              className="px-4 py-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
             >
               Cancel
             </button>
             <button 
               type="submit"
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700"
             >
               Save Changes
             </button>
@@ -872,19 +904,19 @@ export const EditWalletModal = ({ wallet, onClose, onSave, members }) => {
 export const ConfirmationModal = ({ title, message, onConfirm, onCancel }) => {
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onMouseDown={onCancel}>
-      <div className="bg-white rounded-lg p-6 w-96" onMouseDown={(e) => e.stopPropagation()}>
-        <h2 className="text-xl font-bold mb-4 text-black">{title}</h2>
-        <p className="text-black mb-6">{message}</p>
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96" onMouseDown={(e) => e.stopPropagation()}>
+        <h2 className="text-xl font-bold mb-4 text-black dark:text-white">{title}</h2>
+        <p className="text-black dark:text-white mb-6">{message}</p>
         <div className="flex justify-end space-x-2">
           <button 
             onClick={onCancel}
-            className="px-4 py-2 text-black hover:bg-gray-100 rounded"
+            className="px-4 py-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
           >
             Cancel
           </button>
           <button 
             onClick={onConfirm}
-            className="px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
+            className="px-4 py-2 bg-red-500 dark:bg-red-600 text-white rounded hover:bg-red-600 dark:hover:bg-red-700"
           >
             Delete
           </button>
@@ -913,21 +945,21 @@ export const EditInvestmentModal = ({ investment, onClose, onSave, members }) =>
 
   return (
     <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50" onMouseDown={onClose}>
-      <div className="bg-white rounded-lg p-6 w-96" onMouseDown={(e) => e.stopPropagation()}>
-        <h2 className="text-xl font-bold mb-4 text-black">Edit Investment</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-96" onMouseDown={(e) => e.stopPropagation()}>
+        <h2 className="text-xl font-bold mb-4 text-black dark:text-white">Edit Investment</h2>
         <form onSubmit={handleSubmit}>
           <div className="space-y-4">
             <input
               type="text"
               name="name"
               placeholder="Investment Name"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={investmentData.name}
               onChange={handleChange}
             />
             <select
               name="memberInCharge"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={investmentData.memberInCharge}
               onChange={handleChange}
             >
@@ -939,7 +971,7 @@ export const EditInvestmentModal = ({ investment, onClose, onSave, members }) =>
               type="number"
               name="value"
               placeholder="Value"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={investmentData.value}
               onChange={handleChange}
               min="0"
@@ -948,7 +980,7 @@ export const EditInvestmentModal = ({ investment, onClose, onSave, members }) =>
               type="number"
               name="pnl"
               placeholder="P&L"
-              className="w-full p-2 border rounded"
+              className="w-full p-2 border rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
               value={investmentData.pnl}
               onChange={handleChange}
             />
@@ -957,13 +989,13 @@ export const EditInvestmentModal = ({ investment, onClose, onSave, members }) =>
             <button 
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-black hover:bg-gray-100 rounded"
+              className="px-4 py-2 text-black dark:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
             >
               Cancel
             </button>
             <button 
               type="submit"
-              className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+              className="px-4 py-2 bg-blue-500 dark:bg-blue-600 text-white rounded hover:bg-blue-600 dark:hover:bg-blue-700"
             >
               Save Changes
             </button>

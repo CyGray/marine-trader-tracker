@@ -23,11 +23,11 @@ export const transactionTypes = ['inbound', 'outbound', 'transfer'];
   ];
   
   export const initialInvestments = [
-    { id: generateId(), name: 'ByBit', memberInCharge: 'Kyle Yuan Uy', pnl: 15000, value: 75000 },
-    { id: generateId(), name: 'Forex Trading', memberInCharge: 'Kyle Yuan Uy', pnl: 15000, value: 75000 },
-    { id: generateId(), name: 'Crayfish', memberInCharge: 'Louis Uy', pnl: -2500, value: 32500 },
-    { id: generateId(), name: 'Banana Chips', memberInCharge: 'Fritz Gioranz Tayo', pnl: -5000, value: 50000 },
-    { id: generateId(), name: 'Loans', memberInCharge: 'Fritz Gioranz Tayo', pnl: 28000, value: 128000 }
+    { id: generateId(), name: 'ByBit', memberInCharge: 'Kyle Yuan Uy', pnl: 0, value: 75000 },
+    { id: generateId(), name: 'Forex Trading', memberInCharge: 'Kyle Yuan Uy', pnl: 0, value: 75000 },
+    { id: generateId(), name: 'Crayfish', memberInCharge: 'Louis Uy', pnl: 0, value: 32500 },
+    { id: generateId(), name: 'Banana Chips', memberInCharge: 'Fritz Gioranz Tayo', pnl: 0, value: 50000 },
+    { id: generateId(), name: 'Loans', memberInCharge: 'Fritz Gioranz Tayo', pnl: 0, value: 128000 }
   ];
   
   export const initialTransactions =[
@@ -52,7 +52,7 @@ export const transactionTypes = ['inbound', 'outbound', 'transfer'];
         type: 'outbound', 
         category: 'Loan', 
         date: '2024-06-07', 
-        member: 'Fritz Gioraz Tayo',
+        member: 'Fritz Gioranz Tayo',
         payee: 'BSN' 
       },
       { 

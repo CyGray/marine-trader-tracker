@@ -3,17 +3,23 @@
 import { useEffect, useState } from 'react';
 import { GoogleAuthProvider, signInWithPopup, User, signOut } from 'firebase/auth';
 import { auth } from '../lib/firebaseConfig';
+import DarkModeToggle from '@/components/DarkModeToggle'
 import Image from 'next/image';
 import Link from 'next/link';
 
 export default function Navbar() {
   const [user, setUser] = useState<User | null>(null);
+  const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
     // Listen for auth state changes
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setUser(user);
     });
+
+    // Check for dark mode preference
+    const savedMode = localStorage.getItem('darkMode') === 'true';
+    setDarkMode(savedMode);
 
     // Cleanup subscription on unmount
     return () => unsubscribe();
@@ -47,7 +53,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-white border-b-2 border-deep-blue">
+    <nav className="bg-white dark:bg-gray-950 border-b-2 border-deep-blue dark:border-gray-400">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           {/* Navigation Links - Left Side */}
@@ -56,19 +62,19 @@ export default function Navbar() {
               <div className="flex-shrink-0 flex items-center">
                 <Image
                   className="h-8 w-auto"
-                  src="/icons/logofullinverted.png"
+                  src={darkMode ? "/icons/logofullinvertedwhite.png" : "/icons/logofullinverted.png"}
                   alt="Logo"
                   width={64}
                   height={64}
                 />
               </div>
-              <Link href="/" className="text-gray-700 hover:text-gray-900 px-3 py-2 text-sm font-medium">
+              <Link href="/" className="text-gray-700 dark:text-gray-100 hover:text-gray-900 dark:hover:text-gray-300 px-3 py-2 text-sm font-medium">
                 Home
               </Link>
-              <Link href="/partnerships" className="text-gray-700 hover:text-gray-900 px-3 py-2 text-sm font-medium">
+              <Link href="/partnerships" className="text-gray-700 dark:text-gray-100 hover:text-gray-900 dark:hover:text-gray-300 px-3 py-2 text-sm font-medium">
                 Partnerships
               </Link>
-              <Link href="/contact" className="text-gray-700 hover:text-gray-900 px-3 py-2 text-sm font-medium">
+              <Link href="/contact" className="text-gray-700 dark:text-gray-100 hover:text-gray-900 dark:hover:text-gray-300 px-3 py-2 text-sm font-medium">
                 Contact Us
               </Link>
             </div>
@@ -76,6 +82,7 @@ export default function Navbar() {
 
           {/* Logo and User Profile - Right Side */}
           <div className="flex items-center">
+            <DarkModeToggle onToggle={(mode) => setDarkMode(mode)} />
             {/* User Profile */}
             <div className="ml-4 flex items-center">
               {user ? (
@@ -90,20 +97,20 @@ export default function Navbar() {
                         height={32}
                       />
                     )}
-                    <span className="ml-2 text-sm font-medium text-gray-700">
+                    <span className="ml-2 text-sm font-medium text-gray-700 dark:text-gray-100">
                       {user.displayName || 'User'}
                     </span>
                   </div>
                   <button
                     onClick={clearLocalStorage}
-                    className="ml-4 px-3 py-1 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                    className="ml-4 px-3 py-1 text-sm text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
                     title="Clear website data"
                   >
                     Clear Data
                   </button>
                   <button
                     onClick={handleLogout}
-                    className="ml-4 px-3 py-1 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                    className="ml-4 px-3 py-1 text-sm text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
                   >
                     Logout
                   </button>
@@ -111,7 +118,7 @@ export default function Navbar() {
               ) : (
                 <button
                   onClick={handleLogin}
-                  className="ml-4 px-3 py-1 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50"
+                  className="ml-4 px-3 py-1 text-sm text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-800"
                 >
                   Log in
                 </button>
@@ -123,48 +130,3 @@ export default function Navbar() {
     </nav>
   );
 }
-
-/**
- * How to use the setUser functions and share user data with other components:
- * 
- * 1. In your page.tsx, you can use the same Firebase auth listener pattern to get the user:
- * 
- *    import { useEffect, useState } from 'react';
- *    import { getAuth, User } from 'firebase/auth';
- *    import { app } from '../lib/firebaseConfig';
- *    
- *    const auth = getAuth(app);
- *    
- *    export default function Page() {
- *      const [user, setUser] = useState<User | null>(null);
- *    
- *      useEffect(() => {
- *        const unsubscribe = auth.onAuthStateChanged((user) => {
- *          setUser(user);
- *        });
- *        return () => unsubscribe();
- *      }, []);
- *    
- *      return (
- *        <>
- *          <Navbar />
- *          {/* Other components that need user data - pass as prop }
- *          <Component1 user={user} />
- *          <Component2 user={user} />
- *        </>
- *      );
- *    }
- * 
- * 2. Alternatively, you can use React Context or a state management library like Redux or Zustand
- *    to share the user state across components without prop drilling.
- * 
- * 3. The Navbar component manages its own user state internally, but the auth state is synchronized
- *    with Firebase, so any login/logout in the Navbar will automatically reflect in the auth state
- *    that other components can listen to.
- * 
- * 4. For components that need user data, you have two options:
- *    a) Listen to auth state changes directly in each component (like in Navbar)
- *    b) Get the user from the parent component (page.tsx) via props
- * 
- * Note: Make sure your firebaseConfig.ts is properly set up with your Firebase project credentials.
- */

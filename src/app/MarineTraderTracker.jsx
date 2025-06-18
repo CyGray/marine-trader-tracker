@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Check, Plus, Search, Filter, Edit, Trash2, TrendingUp, Building2, History, X, Calendar, Wallet, FileText, Activity, Tag, User, DollarSign, Settings } from 'lucide-react';
+import { Check, Plus, Search, Filter, Edit, Trash2, TrendingUp, Building2, History, X, Calendar, Wallet, FileText, Activity, Tag, User, DollarSign, Settings, RefreshCw } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { 
   AddInvestmentModal, 
@@ -54,15 +54,26 @@ const useLocalStorage = (key, initialValue) => {
   return [storedValue, setValue];
 };
 
+
+
+  const normalizeMemberName = (name) => {
+    if (!name) return '';
+    return name.trim().toLowerCase();
+  };
 const MarineTraderTracker = () => {
+
+  
 
   // State with localStorage persistence
   const [wallets, setWallets] = useLocalStorage('wallets', initialWallets);
-  const [investments, setInvestments] = useLocalStorage('investments', initialInvestments);
+  
   const [transactions, setTransactions] = useLocalStorage('transactions', initialTransactions);
   const [pendingPayments, setPendingPayments] = useLocalStorage('pendingPayments', initialPendingPayments);
   const [lastSyncTime, setLastSyncTime] = useLocalStorage('lastSyncTime', null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [pnlData, setPnlData] = useState([]);
+  const [lastPnlRefresh, setLastPnlRefresh] = useState(new Date());
+  const [isRefreshingPnl, setIsRefreshingPnl] = useState(false);
 
   // UI state
   const [activeTab, setActiveTab] = useState('overview');
@@ -129,15 +140,45 @@ const MarineTraderTracker = () => {
     transferFee: 0
   });
 
-  // Mock PnL over time data
-  const pnlData = useMemo(() => [
-    { date: 'Jan', pnl: 5000 },
-    { date: 'Feb', pnl: 12000 },
-    { date: 'Mar', pnl: 8000 },
-    { date: 'Apr', pnl: 18000 },
-    { date: 'May', pnl: 22000 },
-    { date: 'Jun', pnl: 40500 }
-  ], []);
+
+
+  const calculateInvestmentPnL = (investment, allTransactions) => {
+  const investmentTransactions = allTransactions.filter(t => 
+    t.investment === investment.name
+  );
+  
+  console.log(`[PnL Calculation] Starting for investment: ${investment.name}`);
+  console.log(`Found ${investmentTransactions.length} related transactions:`);
+  console.log(investmentTransactions);
+
+  const totalInvested = investmentTransactions
+    .filter(t => t.type === 'inbound')
+    .reduce((sum, t) => sum + t.amount, 0);
+  
+  const totalWithdrawn = investmentTransactions
+    .filter(t => t.type === 'outbound')
+    .reduce((sum, t) => sum + t.amount, 0);
+  
+  const pnl = totalInvested - totalWithdrawn;
+  
+  console.log(`[PnL Calculation] Results for ${investment.name}:`);
+  console.log(`- Total invested: ${totalInvested}`);
+  console.log(`- Total withdrawn: ${totalWithdrawn}`);
+  console.log(`- Calculated PnL: ${pnl}`);
+  
+  return pnl;
+};
+
+
+    const [investments, setInvestments] = useLocalStorage('investments', 
+    initialInvestments.map(investment => ({
+      ...investment,
+      pnl: calculateInvestmentPnL(
+        investment,
+        initialTransactions.filter(t => t.investment === investment.name)
+      )
+    }))
+  );
 
   const handleSort = (key) => {
     setSortConfig(prev => {
@@ -278,41 +319,139 @@ const MarineTraderTracker = () => {
   return () => clearInterval(interval);
 }, []); // Empty dependency array means this runs only once on mount
 
-  // Data filtering
   const filteredData = useMemo(() => {
-    if (selectedMembers.length === members.length) {
+    console.log('[Member Filter] Selected members:', selectedMembers);
+    
+    // Normalize all names for comparison
+    const normalizedSelected = selectedMembers.map(name => name.trim().toLowerCase());
+    const allMemberNames = members.map(m => m.name.trim().toLowerCase());
+
+    if (normalizedSelected.length === allMemberNames.length) {
+      console.log('[Member Filter] All members selected, returning all data');
       return { wallets, investments, transactions, pendingPayments };
     }
-    
-    return {
-      wallets: wallets.filter(w => selectedMembers.includes(w.memberInCharge)),
-      investments: investments.filter(i => selectedMembers.includes(i.memberInCharge)),
-      transactions: transactions.filter(t => selectedMembers.includes(t.member)),
-      pendingPayments: pendingPayments.filter(p => selectedMembers.includes(p.lender))
+
+    const filtered = {
+      wallets: wallets.filter(w => 
+        normalizedSelected.includes(w.memberInCharge.trim().toLowerCase())
+      ),
+      investments: investments.filter(i => 
+        normalizedSelected.includes(i.memberInCharge.trim().toLowerCase())
+      ),
+      transactions: transactions.filter(t => {
+        // Get member from transaction or associated wallet
+        const transactionMember = t.member || 
+          wallets.find(w => w.name === t.wallet)?.memberInCharge;
+        
+        const isIncluded = transactionMember && 
+          normalizedSelected.includes(transactionMember.trim().toLowerCase());
+        
+        if (!isIncluded) {
+          console.log(`[Member Filter] Excluded transaction - Wallet: ${t.wallet}, ` +
+            `Member: ${transactionMember || 'undefined'}`);
+        }
+        return isIncluded;
+      }),
+      pendingPayments: pendingPayments.filter(p => 
+        normalizedSelected.includes(p.lender.trim().toLowerCase())
+      )
     };
-  }, [wallets, investments, transactions, pendingPayments, selectedMembers, members.length]);
+
+    console.log('[Member Filter] Filtered counts:', {
+      transactions: `${filtered.transactions.length}/${transactions.length}`,
+      wallets: `${filtered.wallets.length}/${wallets.length}`
+    });
+
+    return filtered;
+  }, [wallets, investments, transactions, pendingPayments, selectedMembers, members]);
 
   // Totals calculation
   const totalBalance = useMemo(() => (
     filteredData.wallets.reduce((sum, wallet) => sum + wallet.balance, 0)
   ), [filteredData.wallets]);
 
-  const totalPnL = useMemo(() => (
-    filteredData.investments.reduce((sum, investment) => sum + investment.pnl, 0)
-  ), [filteredData.investments]);
+  const totalPnL = useMemo(() => {
+    return filteredData.investments.reduce((sum, investment) => sum + investment.pnl, 0) +
+          filteredData.wallets.reduce((sum, wallet) => sum + (wallet.balance * 0.01), 0); // Adjust with your actual calculation
+  }, [filteredData.investments, filteredData.wallets]);
 
 
   // Member toggle handler
   const handleMemberToggle = useCallback((memberName) => {
+    const normalizedMemberName = normalizeMemberName(memberName);
+    
     setSelectedMembers(prev => {
-      if (prev.includes(memberName)) {
-        const newSelected = prev.filter(m => m !== memberName);
+      const normalizedPrev = prev.map(normalizeMemberName);
+      
+      if (normalizedPrev.includes(normalizedMemberName)) {
+        const newSelected = prev.filter(m => 
+          normalizeMemberName(m) !== normalizedMemberName
+        );
         return newSelected.length === 0 ? members.map(m => m.name) : newSelected;
       } else {
-        return [...prev, memberName];
+        return [...prev, memberName]; // Keep original casing for display
       }
     });
   }, [members]);
+
+  // logic
+  
+
+
+
+  const calculatePnL = useCallback(() => {
+  setIsRefreshingPnl(true);
+  
+  try {
+    // Update each investment's PnL
+    setInvestments(prev => prev.map(investment => ({
+      ...investment,
+      pnl: calculateInvestmentPnL(investment, filteredData.transactions)
+    })));
+
+    // Calculate total PnL
+    const totalPnL = filteredData.investments.reduce((sum, investment) => {
+      return sum + calculateInvestmentPnL(investment, filteredData.transactions);
+    }, 0);
+
+    // Generate historical PnL data
+    const now = new Date();
+    const newPnlData = Array.from({ length: 6 }, (_, i) => {
+      const date = new Date(now);
+      date.setMonth(date.getMonth() - (5 - i));
+      
+      // Calculate PnL for this month
+      const monthlyPnL = filteredData.investments.reduce((sum, investment) => {
+        const investmentTx = filteredData.transactions.filter(t => 
+          t.investment === investment.name &&
+          new Date(t.date).getMonth() === date.getMonth() &&
+          new Date(t.date).getFullYear() === date.getFullYear()
+        );
+        
+        const monthlyInvested = investmentTx
+          .filter(t => t.type === 'inbound')
+          .reduce((sum, t) => sum + t.amount, 0);
+          
+        const monthlyWithdrawn = investmentTx
+          .filter(t => t.type === 'outbound')
+          .reduce((sum, t) => sum + t.amount, 0);
+          
+        // This is simplified - you might want to track investment value by month
+        return (monthlyWithdrawn - monthlyInvested);
+      }, 0);
+
+      return {
+        date: date.toLocaleString('default', { month: 'short' }),
+        pnl: monthlyPnL
+      };
+    });
+
+    setPnlData(newPnlData);
+    setLastPnlRefresh(new Date());
+  } finally {
+    setIsRefreshingPnl(false);
+  }
+}, [filteredData.investments, filteredData.transactions, setInvestments]);
 
   // CRUD operations
   const addWallet = useCallback(() => {
@@ -348,7 +487,19 @@ const MarineTraderTracker = () => {
     setShowAddInvestmentModal(false);
   }, [newInvestment, setInvestments]);
 
- const addNewTransaction = useCallback(async (transaction) => {
+const addNewTransaction = useCallback(async (transaction) => {
+    const associatedWallet = wallets.find(w => w.name === transaction.wallet);
+    const transactionWithMember = {
+      ...transaction,
+      member: transaction.member || associatedWallet?.memberInCharge
+    };
+
+    console.log('[Transaction] Creating transaction with member:', {
+      explicitMember: transaction.member,
+      walletMember: associatedWallet?.memberInCharge,
+      finalMember: transactionWithMember.member
+    });
+  
   let transactionsToAdd = [];
   
   if (transaction.type === 'transfer') {
@@ -395,42 +546,69 @@ const MarineTraderTracker = () => {
       lastmodified: new Date().toISOString()
     }];
     
-    // Update wallet balance for non-transfer transactions
-    if (transaction.type === 'inbound') {
-      setWallets(prev => prev.map(wallet => 
-        wallet.name === transaction.wallet 
-          ? { ...wallet, balance: wallet.balance + Number(transaction.amount) }
-          : wallet
-      ));
-    } else {
-      setWallets(prev => prev.map(wallet => 
-        wallet.name === transaction.wallet 
-          ? { ...wallet, balance: wallet.balance - Number(transaction.amount) }
-          : wallet
-      ));
+    // Update wallet balance
+    setWallets(prev => prev.map(wallet => {
+      if (wallet.name === transaction.wallet) {
+        const newBalance = wallet.balance + 
+          (transaction.type === 'inbound' ? Number(transaction.amount) : -Number(transaction.amount));
+        console.log(`[Wallet] Updating ${wallet.name} balance from ${wallet.balance} to ${newBalance}`);
+        return { ...wallet, balance: newBalance };
+      }
+      return wallet;
+    }));
+
+    // Update investment value if specified
+    // Update investment value if specified
+    if (transaction.investment) {
+      console.log(`[Investment] Transaction affects investment: ${transaction.investment}`);
+      
+      setInvestments(prev => prev.map(investment => {
+        if (investment.name === transaction.investment) {
+          // CHANGED: No longer need to track value change since PnL is transaction-based
+          // Get ALL transactions for this investment (including the new one)
+          const allTransactions = [
+            ...transactions.filter(t => t.investment === investment.name),
+            ...transactionsToAdd.filter(t => t.investment === investment.name)
+          ];
+          
+          // CHANGED: Calculate PnL based only on transactions
+          const newPnl = calculateInvestmentPnL(investment, allTransactions);
+          
+          console.log(`[Investment] New PnL for ${investment.name}: ${newPnl}`);
+          
+          return {
+            ...investment,
+            pnl: newPnl
+          };
+        }
+        return investment;
+      }));
     }
   }
 
   // Add the transaction(s) to state
+  console.log('[Transaction] Adding transaction to state');
   setTransactions(prev => [...prev, ...transactionsToAdd]);
   
   try {
-    // Sync all new transactions
+    console.log('[Sync] Attempting to sync with Google Sheets');
     const results = await Promise.all(
       transactionsToAdd.map(tx => syncWithSheets('create', tx))
     );
     
     if (results.some(success => !success)) {
-      // Rollback if any sync fails
+      console.error('[Sync] Failed to sync some transactions');
       setTransactions(prev => prev.filter(t => !transactionsToAdd.some(nt => nt.id === t.id)));
       alert('Failed to sync some transactions with Google Sheets');
+    } else {
+      console.log('[Sync] Successfully synced transactions');
     }
   } catch (error) {
-    console.error('Transaction creation failed:', error);
+    console.error('[Transaction] Creation failed:', error);
     setTransactions(prev => prev.filter(t => !transactionsToAdd.some(nt => nt.id === t.id)));
     alert('Failed to create transaction. Please try again.');
   }
-}, [setTransactions, syncWithSheets, setWallets]);
+}, [setTransactions, syncWithSheets, setWallets, setInvestments, transactions]);
 
 const deleteTransaction = useCallback(async (transactionId) => {
   if (!transactionId) {
@@ -439,14 +617,46 @@ const deleteTransaction = useCallback(async (transactionId) => {
     return;
   }
 
+  const transactionToDelete = transactions.find(t => t.id === transactionId);
+  if (!transactionToDelete) return;
+
   const originalTransactions = [...transactions];
   setTransactions(prev => prev.filter(t => t.id !== transactionId));
   
+  // Revert wallet balance if needed
+  if (transactionToDelete.type === 'transfer') {
+    setWallets(prev => prev.map(wallet => {
+      if (wallet.name === transactionToDelete.wallet) {
+        return { ...wallet, balance: wallet.balance + transactionToDelete.amount };
+      }
+      if (wallet.name === transactionToDelete.targetWallet) {
+        const netAmount = transactionToDelete.amount - (transactionToDelete.transferFee || 0);
+        return { ...wallet, balance: wallet.balance - netAmount };
+      }
+      return wallet;
+    }));
+  } else if (transactionToDelete.type === 'inbound') {
+    setWallets(prev => prev.map(wallet => 
+      wallet.name === transactionToDelete.wallet 
+        ? { ...wallet, balance: wallet.balance - transactionToDelete.amount }
+        : wallet
+    ));
+  } else {
+    setWallets(prev => prev.map(wallet => 
+      wallet.name === transactionToDelete.wallet 
+        ? { ...wallet, balance: wallet.balance + transactionToDelete.amount }
+        : wallet
+    ));
+  }
+
+  // Revert investment PnL if needed
+  if (transactionToDelete.investment) {
+    calculatePnL();
+  }
+  
   try {
-    // Now using the same payload structure as other actions
     await syncWithSheets('delete', { 
       id: transactionId,
-      // Include minimal required fields (date is required for merge logic)
       date: new Date().toISOString().slice(0, 10),
       wallet: '',
       amount: 0,
@@ -460,7 +670,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
     setTransactions(originalTransactions);
     alert(`Failed to delete transaction: ${error.message}`);
   }
-}, [transactions, setTransactions, syncWithSheets]);
+}, [transactions, setTransactions, syncWithSheets, setWallets, setInvestments, calculatePnL]);
 
   const handleUpdateWallet = useCallback((updatedWallet) => {
     setWallets(prev => prev.map(w => 
@@ -532,53 +742,71 @@ const deleteTransaction = useCallback(async (transactionId) => {
   }, [transactionToDelete, deleteTransaction]);
 
 
-  const renderOverview = useCallback(() => (
-  <div className="space-y-6">
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg text-black font-semibold mb-2">Total Balance</h3>
-        <p className="text-3xl font-bold text-green-600">₱{totalBalance.toLocaleString()}</p>
+  const renderOverview = useCallback(() => {
+  // Calculate investment-specific PnL
+  const investmentPnL = filteredData.investments.reduce((sum, investment) => sum + investment.pnl, 0);
+  
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 relative">
+          <h3 className="text-lg text-black dark:text-gray-100 font-semibold mb-2">Total Balance</h3>
+          <p className="text-3xl font-bold text-green-600">₱{totalBalance.toLocaleString()}</p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 relative">
+          <div className="absolute top-3 right-3">
+            <button 
+              onClick={calculatePnL}
+              disabled={isRefreshingPnl}
+              className="text-gray-400 hover:text-gray-600 transition-colors"
+              title="Refresh P&L"
+            >
+              <RefreshCw size={18} className={isRefreshingPnl ? 'animate-spin' : ''} />
+            </button>
+          </div>
+          <h3 className="text-lg text-black dark:text-gray-100 font-semibold mb-2">Investment P&L</h3>
+          <p className={`text-3xl font-bold ${investmentPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            ₱{investmentPnL.toLocaleString()}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Last updated: {formatDate(lastPnlRefresh, 'HH:mm:ss')}
+          </p>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+          <h3 className="text-lg text-black dark:text-gray-100 font-semibold mb-2">Pending Payments</h3>
+          <p className="text-3xl font-bold text-yellow-600">{filteredData.pendingPayments.filter(p => p.status === 'pending').length}</p>
+        </div>
       </div>
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg text-black font-semibold mb-2">Total P&L</h3>
-        <p className={`text-3xl font-bold ${totalPnL >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-          ₱{totalPnL.toLocaleString()}
-        </p>
-      </div>
-      <div className="bg-white rounded-lg shadow p-6">
-        <h3 className="text-lg text-black font-semibold mb-2">Pending Payments</h3>
-        <p className="text-3xl font-bold text-yellow-600">{filteredData.pendingPayments.filter(p => p.status === 'pending').length}</p>
-      </div>
-    </div>
+    
     
     {/* Pending Payments Table */}
-    <div className="bg-white rounded-lg shadow">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
       <div className="p-6 border-b">
-        <h3 className="text-lg text-black font-semibold">Pending Payments</h3>
+        <h3 className="text-lg text-black dark:text-gray-100 font-semibold">Pending Payments</h3>
       </div>
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 dark:bg-gray-700">
             <tr>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Payee</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Lender</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Amount</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Due Date</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Wallet</th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">Actions</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">Payee</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">Lender</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">Amount</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">Due Date</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">Wallet</th>
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200">
             {filteredData.pendingPayments
               .filter(payment => payment.status === 'pending')
               .map(payment => (
                 <tr key={payment.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.payee}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.lender}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black font-medium">₱{payment.amount.toLocaleString()}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.dueDate}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">{payment.wallet}</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">{payment.payee}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">{payment.lender}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100 font-medium">₱{payment.amount.toLocaleString()}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">{payment.dueDate}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">{payment.wallet}</td>
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">
                     <div className="flex space-x-2">
                       <button 
                         onClick={() => handlePaymentComplete(payment)}
@@ -588,7 +816,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
                         <Check size={16} />
                       </button>
                       <button 
-                        className="text-blue-600 hover:text-blue-800"
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                         title="Edit payment"
                       >
                         <Edit size={16} />
@@ -610,8 +838,8 @@ const deleteTransaction = useCallback(async (transactionId) => {
     </div>
 
     {/* P&L Chart */}
-    <div className="bg-white rounded-lg shadow p-6">
-      <h3 className="text-lg text-black font-semibold mb-4">P&L Over Time</h3>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6">
+      <h3 className="text-lg text-black dark:text-gray-100 font-semibold mb-4">P&L Over Time</h3>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={pnlData}>
           <CartesianGrid strokeDasharray="3 3" />
@@ -623,7 +851,8 @@ const deleteTransaction = useCallback(async (transactionId) => {
       </ResponsiveContainer>
     </div>
   </div>
-), [filteredData.pendingPayments, totalBalance, totalPnL, pnlData, handlePaymentComplete, handlePaymentDelete]);
+  );
+}, [filteredData.investments, filteredData.pendingPayments, totalBalance, isRefreshingPnl, lastPnlRefresh, calculatePnL]);
 
 
   const renderWallets = useCallback(() => (
@@ -648,23 +877,35 @@ const deleteTransaction = useCallback(async (transactionId) => {
     {/* Add Wallet button */}
     <div 
       onClick={() => setShowAddWalletModal(true)}
-      className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors h-48"
+      className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700transition-colors h-48"
     >
-      <Plus className="text-black mb-2" size={32} />
-      <p className="text-black">Add Wallet</p>
+      <Plus className="text-black dark:text-gray-100 mb-2" size={32} />
+      <p className="text-black dark:text-gray-100">Add Wallet</p>
     </div>
   </div>
 ), [filteredData.wallets]);
 
   const renderInvestments = useCallback(() => (
   <div className="space-y-6">
+    <div className="flex justify-between items-center">
+      <h2 className="text-xl font-semibold text-black dark:text-gray-100">Investments</h2>
+      <button 
+        onClick={calculatePnL}
+        disabled={isRefreshingPnl}
+        className="flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:dark:text-gray-300 text-sm"
+      >
+        <RefreshCw size={14} className={isRefreshingPnl ? 'animate-spin' : ''} />
+        <span>Refresh P&L</span>
+      </button>
+    </div>
+    
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
       {filteredData.investments.map(investment => {
         const memberColor = memberColors[investment.memberInCharge] || 'bg-gray-500';
         return (
           <div 
             key={investment.id} 
-            className="bg-white rounded-lg shadow p-6 relative group hover:shadow-lg transition-shadow"
+            className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 relative group hover:shadow-lg transition-shadow"
           >
             {/* Edit/Delete buttons */}
             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-1">
@@ -693,21 +934,21 @@ const deleteTransaction = useCallback(async (transactionId) => {
             <div className={`w-12 h-12 rounded-lg ${memberColor} flex items-center justify-center mb-4`}>
               <TrendingUp className="text-white" size={24} />
             </div>
-            <h3 className="font-semibold text-lg text-black mb-2">{investment.name}</h3>
-            <p className="text-2xl font-bold mb-2">₱{investment.value.toLocaleString()}</p>
-            <p className={`text-lg text-black font-semibold mb-2 ${investment.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+            <h3 className="font-semibold text-lg text-black dark:text-gray-100 mb-2">{investment.name}</h3>
+            <p className="text-2xl text-black dark:text-gray-100 font-bold mb-2">₱{investment.value.toLocaleString()}</p>
+            <p className={`text-lg text-black dark:text-gray-100 font-semibold mb-2 ${investment.pnl >= 0 ? 'text-green-600' : 'text-red-600'}`}>
               {investment.pnl >= 0 ? '+' : ''}₱{investment.pnl.toLocaleString()}
             </p>
-            <p className="text-sm text-black">{investment.memberInCharge}</p>
+            <p className="text-sm text-black dark:text-gray-100">{investment.memberInCharge}</p>
           </div>
         );
       })}
       <div 
         onClick={() => setShowAddInvestmentModal(true)}
-        className="border-2 border-dashed border-gray-300 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 transition-colors"
+        className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:border-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 dark:hover:bg-gray-700transition-colors"
       >
-        <Plus className="text-black mb-2" size={32} />
-        <p className="text-black">Add Investment</p>
+        <Plus className="text-black dark:text-gray-100 mb-2" size={32} />
+        <p className="text-black dark:text-gray-100">Add Investment</p>
       </div>
     </div>
     
@@ -754,14 +995,17 @@ const deleteTransaction = useCallback(async (transactionId) => {
       />
     )}
   </div>
-), [filteredData.investments]);
+), [filteredData.investments, isRefreshingPnl, calculatePnL]);
 
-  const updateTransaction = useCallback(async (updatedData) => {
+const updateTransaction = useCallback(async (updatedData) => {
   const updatedTransaction = {
     ...updatedData,
     amount: Number(updatedData.amount),
     lastmodified: new Date().toISOString()
   };
+
+  // Get the original transaction to calculate differences
+  const originalTransaction = transactions.find(t => t.id === updatedTransaction.id);
   
   // First update the transaction in state
   setTransactions(prev => prev.map(t => 
@@ -773,34 +1017,91 @@ const deleteTransaction = useCallback(async (transactionId) => {
     if (!success) {
       // If sync fails, revert the transaction in state
       setTransactions(prev => prev.map(t => 
-        t.id === updatedTransaction.id ? updatedData : t
+        t.id === updatedTransaction.id ? originalTransaction : t
       ));
       alert('Failed to sync updates with Google Sheets');
     } else {
-      // Only update wallet balances after successful sync
+      // Calculate wallet balance changes
       if (updatedTransaction.type === 'transfer') {
         // For transfers, we need to update both wallets
         setWallets(prev => prev.map(wallet => {
           if (wallet.name === updatedTransaction.wallet) {
-            return { ...wallet, balance: wallet.balance - updatedTransaction.amount };
+            const originalAmount = originalTransaction.amount;
+            const newAmount = updatedTransaction.amount;
+            return { ...wallet, balance: wallet.balance + (originalAmount - newAmount) };
           }
           if (wallet.name === updatedTransaction.targetWallet) {
-            return { ...wallet, balance: wallet.balance + (updatedTransaction.amount - (updatedTransaction.transferFee || 0)) };
+            const originalNet = originalTransaction.amount - (originalTransaction.transferFee || 0);
+            const newNet = updatedTransaction.amount - (updatedTransaction.transferFee || 0);
+            return { ...wallet, balance: wallet.balance + (newNet - originalNet) };
           }
           return wallet;
         }));
-      } else if (updatedTransaction.type === 'inbound') {
-        setWallets(prev => prev.map(wallet => 
-          wallet.name === updatedTransaction.wallet 
-            ? { ...wallet, balance: wallet.balance + updatedTransaction.amount }
-            : wallet
-        ));
       } else {
-        setWallets(prev => prev.map(wallet => 
-          wallet.name === updatedTransaction.wallet 
-            ? { ...wallet, balance: wallet.balance - updatedTransaction.amount }
-            : wallet
-        ));
+        // For regular transactions, update wallet balance
+        setWallets(prev => prev.map(wallet => {
+          if (wallet.name === updatedTransaction.wallet) {
+            const originalAmount = originalTransaction.amount;
+            const newAmount = updatedTransaction.amount;
+            const originalDirection = originalTransaction.type === 'inbound' ? 1 : -1;
+            const newDirection = updatedTransaction.type === 'inbound' ? 1 : -1;
+            return { 
+              ...wallet, 
+              balance: wallet.balance + 
+                (originalDirection * originalAmount) - 
+                (newDirection * newAmount)
+            };
+          }
+          return wallet;
+        }));
+      }
+
+      // Handle investment updates if changed
+      const investmentChanged = 
+        updatedTransaction.investment !== originalTransaction.investment ||
+        updatedTransaction.amount !== originalTransaction.amount ||
+        updatedTransaction.type !== originalTransaction.type;
+
+      if (investmentChanged) {
+        setInvestments(prev => prev.map(investment => {
+          // Remove original transaction's effect if it was linked to an investment
+          if (originalTransaction.investment && investment.name === originalTransaction.investment) {
+            const originalChange = originalTransaction.type === 'inbound' 
+              ? originalTransaction.amount 
+              : -originalTransaction.amount;
+            return {
+              ...investment,
+              value: investment.value - originalChange,
+              pnl: calculateInvestmentPnL(
+                {
+                  ...investment,
+                  value: investment.value - originalChange
+                },
+                transactions.filter(t => t.id !== originalTransaction.id)
+              )
+            };
+          }
+          
+          // Add new transaction's effect if it's linked to an investment
+          if (updatedTransaction.investment && investment.name === updatedTransaction.investment) {
+            const newChange = updatedTransaction.type === 'inbound' 
+              ? updatedTransaction.amount 
+              : -updatedTransaction.amount;
+            return {
+              ...investment,
+              value: investment.value + newChange,
+              pnl: calculateInvestmentPnL(
+                {
+                  ...investment,
+                  value: investment.value + newChange
+                },
+                [...transactions.filter(t => t.id !== originalTransaction.id), updatedTransaction]
+              )
+            };
+          }
+          
+          return investment;
+        }));
       }
       
       setEditingTransaction(null);
@@ -809,10 +1110,10 @@ const deleteTransaction = useCallback(async (transactionId) => {
   } catch (error) {
     console.error('Transaction update failed:', error);
     setTransactions(prev => prev.map(t => 
-      t.id === updatedTransaction.id ? updatedData : t
+      t.id === updatedTransaction.id ? originalTransaction : t
     ));
   }
-}, [setTransactions, syncWithSheets, setWallets]);
+}, [transactions, setTransactions, syncWithSheets, setWallets, setInvestments]);
 
   const renderHistory = useCallback(() => {
   // Filter by selected members is already handled by filteredData
@@ -898,19 +1199,19 @@ const deleteTransaction = useCallback(async (transactionId) => {
   };
 
   return (
-    <div className="bg-white rounded-lg shadow">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow">
       <div className="p-6 border-b">
         <div className="flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-          <h3 className="text-lg text-black font-semibold">Transaction History</h3>
+          <h3 className="text-lg text-black dark:text-gray-100 font-semibold">Transaction History</h3>
           
           <div className="flex flex-col sm:flex-row gap-2">
             {/* Search Input */}
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black" size={16} />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-black dark:text-gray-100 dark:outline-white" size={16} />
               <input 
                 type="text" 
                 placeholder="Search transactions..." 
-                className="pl-10 pr-4 py-2 border rounded-lg w-full"
+                className="pl-10 pr-4 py-2 border rounded-lg w-full dark:text-gray-100 dark:outline-gray-100"
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
@@ -923,7 +1224,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
             <div className="relative">
               <button 
                 onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                className="p-2 border rounded-lg hover:bg-gray-50 flex items-center gap-2"
+                className="p-2 border rounded-lg text-black dark:text-gray-50 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
               >
                 <Filter size={16} />
                 <span>Add Filter</span>
@@ -931,9 +1232,9 @@ const deleteTransaction = useCallback(async (transactionId) => {
               
               {/* Filter Dropdown */}
               {showFilterDropdown && (
-                <div className="absolute right-0 mt-2 w-56 bg-white rounded-md shadow-lg z-10 border">
+                <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-800 rounded-md shadow-lg z-10 border">
                   <div className="py-1">
-                    <div className="px-3 py-2 text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    <div className="px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                       Filter by
                     </div>
                     {Object.keys(filterOptions).map(field => (
@@ -944,7 +1245,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
                           setShowFilterDropdown(false);
                           setShowFilterOptions(true);
                         }}
-                        className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                        className="block w-full text-left px-4 py-2 text-sm dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-900"
                       >
                         <div className="flex items-center gap-2">
                           {field === 'type' && <Activity size={14} />}
@@ -1011,7 +1312,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
             })}
             <button
               onClick={() => setActiveFilters({})}
-              className="text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1"
             >
               Clear all
               <X size={14} />
@@ -1031,7 +1332,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
           }}
         >
           <div 
-            className="bg-white rounded-lg p-6 w-full max-w-md"
+            className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex justify-between items-center mb-4">
@@ -1040,7 +1341,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
               </h3>
               <button 
                 onClick={() => setShowFilterOptions(false)}
-                className="text-gray-500 hover:text-gray-700"
+                className="text-gray-500 dark:text-gray-400 hover:dark:text-gray-300"
               >
                 <X size={20} />
               </button>
@@ -1108,7 +1409,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
                   });
                   setShowFilterOptions(false);
                 }}
-                className="px-4 py-2 border rounded hover:bg-gray-50"
+                className="px-4 py-2 border rounded hover:bg-gray-50 dark:hover:bg-gray-700"
               >
                 Clear
               </button>
@@ -1126,10 +1427,10 @@ const deleteTransaction = useCallback(async (transactionId) => {
       {/* Table Header with Sortable Columns */}
       <div className="overflow-x-auto">
         <table className="w-full">
-          <thead className="bg-gray-50">
+          <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-900"
                 onClick={() => handleSort('date')}
               >
                 <div className="flex items-center">
@@ -1143,7 +1444,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
                 </div>
               </th>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-900"
                 onClick={() => handleSort('wallet')}
               >
                 <div className="flex items-center">
@@ -1156,32 +1457,32 @@ const deleteTransaction = useCallback(async (transactionId) => {
                   )}
                 </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">
                 <div className="flex items-center">
                   <FileText size={14} className="mr-2" />
                   Article
                 </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">
                 <div className="flex items-center">
                   <Activity size={14} className="mr-2" />
                   Type
                 </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">
                 <div className="flex items-center">
                   <Tag size={14} className="mr-2" />
                   Category
                 </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">
                 <div className="flex items-center">
                   <User size={14} className="mr-2" />
                   Payee/Lender
                 </div>
               </th>
               <th 
-                className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider cursor-pointer hover:bg-gray-100"
+                className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 dark:bg-gray-900"
                 onClick={() => handleSort('amount')}
               >
                 <div className="flex items-center">
@@ -1194,7 +1495,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
                   )}
                 </div>
               </th>
-              <th className="px-6 py-3 text-left text-xs font-medium text-black uppercase tracking-wider">
+              <th className="px-6 py-3 text-left text-xs font-medium text-black dark:text-gray-100 uppercase tracking-wider">
                 <div className="flex items-center">
                   <Settings size={14} className="mr-2" />
                   Actions
@@ -1204,25 +1505,25 @@ const deleteTransaction = useCallback(async (transactionId) => {
           </thead>
           
           {/* Table Body */}
-          <tbody className="bg-white divide-y divide-gray-200">
+          <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200">
             {paginatedTransactions.length > 0 ? (
               paginatedTransactions.map(transaction => (
                 <tr key={transaction.id}>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">
                     {formatDate(transaction.date)}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">
                     {transaction.wallet}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">
                     {transaction.article || '-'}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">
                     <div className="flex items-center justify-center">
                       {getTypeIcon(transaction.type)}
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">
                     {transaction.category === 'Transfer Out' 
                       ? `Transfer to ${transaction.targetWallet || 'Unknown'}`
                       : transaction.category === 'Transfer In'
@@ -1233,24 +1534,24 @@ const deleteTransaction = useCallback(async (transactionId) => {
                           )?.wallet || 'Unknown'}`
                         : transaction.category}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">
                     {transaction.category === 'Loan' 
                       ? transaction.payee || transaction.member 
                       : transaction.payee || '-'}
                   </td>
-                  <td className={`px-6 py-4 whitespace-nowrap text-sm text-black font-medium ${
+                  <td className={`px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100 font-medium ${
                     transaction.type === 'inbound' ? 'text-green-600' : 'text-red-600'
                   }`}>
                     {transaction.type === 'inbound' ? '+' : '-'}₱{transaction.amount.toLocaleString()}
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black">
+                  <td className="px-6 py-4 whitespace-nowrap text-sm text-black dark:text-gray-100">
                     <div className="flex space-x-2">
                       <button 
                         onClick={() => {
                           setEditingTransaction(transaction);
                           setShowAddTransactionModal(true);
                         }}
-                        className="text-blue-600 hover:text-blue-800"
+                        className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
                       >
                         <Edit size={16} />
                       </button>
@@ -1266,7 +1567,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
               ))
             ) : (
               <tr>
-                <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500">
+                <td colSpan="8" className="px-6 py-4 text-center text-sm text-gray-500 dark:text-gray-400">
                   No transactions found matching your criteria
                 </td>
               </tr>
@@ -1278,14 +1579,14 @@ const deleteTransaction = useCallback(async (transactionId) => {
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="px-6 py-3 border-t flex flex-col sm:flex-row justify-between items-center gap-3">
-          <p className="text-sm text-black">
+          <p className="text-sm text-black dark:text-gray-100">
             Showing {((currentPage - 1) * 20) + 1} to {Math.min(currentPage * 20, sortedTransactions.length)} of {sortedTransactions.length} results
           </p>
           <div className="flex space-x-2">
             <button 
               onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
               disabled={currentPage === 1}
-              className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
+              className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Previous
             </button>
@@ -1307,7 +1608,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
                   <button
                     key={pageNum}
                     onClick={() => setCurrentPage(pageNum)}
-                    className={`px-3 py-1 mx-1 rounded ${currentPage === pageNum ? 'bg-blue-500 text-white' : 'border hover:bg-gray-50'}`}
+                    className={`px-3 py-1 mx-1 rounded ${currentPage === pageNum ? 'bg-blue-500 text-white' : 'border hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                   >
                     {pageNum}
                   </button>
@@ -1318,7 +1619,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
                   <span className="mx-1">...</span>
                   <button
                     onClick={() => setCurrentPage(totalPages)}
-                    className="px-3 py-1 border rounded hover:bg-gray-50"
+                    className="px-3 py-1 border rounded hover:bg-gray-50 dark:hover:bg-gray-700"
                   >
                     {totalPages}
                   </button>
@@ -1328,7 +1629,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
             <button 
               onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
               disabled={currentPage === totalPages}
-              className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50"
+              className="px-3 py-1 border rounded disabled:opacity-50 hover:bg-gray-50 dark:hover:bg-gray-700"
             >
               Next
             </button>
@@ -1367,41 +1668,69 @@ const deleteTransaction = useCallback(async (transactionId) => {
 }, [activeTab, renderOverview, renderWallets, renderInvestments, renderHistory]);
 
   return (
-    <div className="min-h-screen bg-gray-100 relative">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 relative">
       {/* Background texture - more subtle, modern pattern */}
-    <div className="absolute inset-0 opacity-40 pointer-events-none" 
+    <div className="dark:hidden absolute inset-0 opacity-40 pointer-events-none" 
          style={{
            backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' viewBox=\'0 0 100 100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z\' fill=\'%23192f59\' fill-opacity=\'0.1\' fill-rule=\'evenodd\'/%3E%3C/svg%3E")',
             zIndex: 0
           }}
-    />
+    /> {/*
+    <div className="hidden dark:block absolute inset-0 opacity-40 pointer-events-none" 
+         style={{
+           backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'100\' height=\'100\' viewBox=\'0 0 100 100\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cpath d=\'M11 18c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm48 25c3.866 0 7-3.134 7-7s-3.134-7-7-7-7 3.134-7 7 3.134 7 7 7zm-43-7c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm63 31c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM34 90c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zm56-76c1.657 0 3-1.343 3-3s-1.343-3-3-3-3 1.343-3 3 1.343 3 3 3zM12 86c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm28-65c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm23-11c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-6 60c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm29 22c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zM32 63c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm57-13c2.76 0 5-2.24 5-5s-2.24-5-5-5-5 2.24-5 5 2.24 5 5 5zm-9-21c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM60 91c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM35 41c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2zM12 60c1.105 0 2-.895 2-2s-.895-2-2-2-2 .895-2 2 .895 2 2 2z\' fill=\'%23a0aec0\' fill-opacity=\'0.1\' fill-rule=\'evenodd\'/%3E%3C/svg%3E")',
+            zIndex: 0
+          }}
+    /> */}
     <div className="relative z-10">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Tab Navigation */}
-        <div className="flex space-x-1 mb-6">
-          {[  
-            { id: 'overview', label: 'Overview', icon: TrendingUp },
-            { id: 'wallets', label: 'Wallets', icon: Wallet },
-            { id: 'investments', label: 'Investments', icon: Building2 },
-            { id: 'history', label: 'History', icon: History }
-          ].map(tab => {
-            const Icon = tab.icon;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center space-x-2 px-4 py-2 rounded-full transition-colors ${
-                  activeTab === tab.id 
-                    ? 'bg-blue-500 text-white' 
-                    : 'bg-white text-blue hover:bg-gray-50'
-                }`}
-              >
-                <Icon size={16} />
-                <span className="text-black">{tab.label}</span>
-              </button>
-            );
-          })}
-        </div>
+  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+    {/* Tab Navigation */}
+    <div className="flex space-x-1 mb-6">
+      {[
+        { id: 'overview', label: 'Overview', icon: TrendingUp },
+        { id: 'wallets', label: 'Wallets', icon: Wallet },
+        { id: 'investments', label: 'Investments', icon: Building2, disabled: process.env.NEXT_PUBLIC_WORKING_ENV === 'production' },
+        { id: 'history', label: 'History', icon: History }
+      ].map(tab => {
+        const Icon = tab.icon;
+        const isActive = activeTab === tab.id;
+        const isDisabled = tab.disabled || false;
+        if (tab.id === "investments") {console.error(`Adding ${tab.id} because NODE_ENV = ${process.env.NEXT_PUBLIC_WORKING_ENV}`);}
+        
+        return (
+          <button
+            key={tab.id}
+            onClick={() => !isDisabled && setActiveTab(tab.id)}
+            disabled={isDisabled}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-full transition-colors ${
+              isActive
+                ? 'bg-blue-500 text-white'
+                : isDisabled
+                  ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : 'bg-white dark:bg-gray-800 text-blue hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+          >
+            <Icon
+              size={16}
+              className={`${
+                isActive
+                  ? 'text-white'
+                  : isDisabled
+                    ? 'text-gray-400 dark:text-gray-500'
+                    : 'text-black dark:text-white'
+              }`}
+            />
+            <span className={`${
+              isActive ? 'text-white' : 
+              isDisabled ? 'text-gray-400 dark:text-gray-500' : 
+              'text-black dark:text-white'
+            }`}>
+              {tab.label}
+            </span>
+          </button>
+        );
+      })}
+    </div>
 
         {/* Member Filter */}
         <div className="flex space-x-2 mb-6 overflow-x-auto">
@@ -1414,7 +1743,7 @@ const deleteTransaction = useCallback(async (transactionId) => {
                 className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors ${
                   selectedMembers.includes(member.name)
                     ? `${memberColor} text-white border-transparent`
-                    : 'bg-white text-black border-gray-300 hover:bg-gray-50'
+                    : 'bg-white dark:bg-gray-800 text-black dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
                 <span className="font-medium">{member.name}</span>
@@ -1540,20 +1869,25 @@ const deleteTransaction = useCallback(async (transactionId) => {
   />
 )}
 
-      <div className="fixed bottom-4 right-4 flex items-center space-x-2">
-        <button 
-          onClick={() => syncWithSheets()} // Wrap in arrow function
-          disabled={isSyncing}
-          className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50"
-        >
-          {isSyncing ? 'Syncing...' : 'Sync Data'}
-        </button>
-        {lastSyncTime && (
-          <span className="text-sm text-gray-500">
-            Last synced: {formatDate(lastSyncTime)}
-          </span>
-        )}
-      </div>
+
+    <div className="fixed bottom-4 right-4 flex items-center space-x-2">
+      <button
+        onClick={() => syncWithSheets()}
+        disabled={isSyncing}
+        className="p-2 rounded-full text-gray-700 dark:text-white hover:bg-gray-200 disabled:opacity-50"
+      >
+        <RefreshCw
+          size={18}
+          className={`transition-transform duration-300 ${isSyncing ? 'animate-spin' : ''}`}
+        />
+      </button>
+      {lastSyncTime && (
+        <span className="text-sm text-gray-500 dark:text-gray-400">
+          Last synced: {formatDate(lastSyncTime)}
+        </span>
+      )}
+    </div>
+
     </div>
     </div>
   );
