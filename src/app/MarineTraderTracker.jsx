@@ -60,10 +60,10 @@ const useLocalStorage = (key, initialValue) => {
     if (!name) return '';
     return name.trim().toLowerCase();
   };
-const MarineTraderTracker = () => {
 
-  
 
+
+const MarineTraderTracker = ({ user }) => {
   // State with localStorage persistence
   const [wallets, setWallets] = useLocalStorage('wallets', initialWallets);
   
@@ -74,6 +74,7 @@ const MarineTraderTracker = () => {
   const [pnlData, setPnlData] = useState([]);
   const [lastPnlRefresh, setLastPnlRefresh] = useState(new Date());
   const [isRefreshingPnl, setIsRefreshingPnl] = useState(false);
+  
 
   // UI state
   const [activeTab, setActiveTab] = useState('overview');
@@ -139,6 +140,16 @@ const MarineTraderTracker = () => {
     targetWallet: '',
     transferFee: 0
   });
+
+  const obfuscateData = (value, isNumeric = false) => {
+    if (!user) {
+      if (isNumeric && typeof value === 'number') {
+        return '•'.repeat(value.toString().length);
+      }
+      return '••••••';
+    }
+    return value;
+  };
 
 
 
@@ -744,14 +755,15 @@ const deleteTransaction = useCallback(async (transactionId) => {
 
   const renderOverview = useCallback(() => {
   // Calculate investment-specific PnL
-  const investmentPnL = filteredData.investments.reduce((sum, investment) => sum + investment.pnl, 0);
+  const displayBalance = obfuscateData(totalBalance, true);
+  const investmentPnL = obfuscateData(filteredData.investments.reduce((sum, investment) => sum + investment.pnl, 0));
   
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 relative">
           <h3 className="text-lg text-black dark:text-gray-100 font-semibold mb-2">Total Balance</h3>
-          <p className="text-3xl font-bold text-green-600">₱{totalBalance.toLocaleString()}</p>
+          <p className="text-3xl font-bold text-green-600">₱{displayBalance}</p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-6 relative">
           <div className="absolute top-3 right-3">
@@ -1668,7 +1680,8 @@ const updateTransaction = useCallback(async (updatedData) => {
 }, [activeTab, renderOverview, renderWallets, renderInvestments, renderHistory]);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 relative">
+    <div className={user ? "min-h-screen bg-gray-100 dark:bg-gray-900 relative": " bg-gray-100 dark:bg-gray-900 blur-sm pointer-events-none select-none"}>
+
       {/* Background texture - more subtle, modern pattern */}
     <div className="dark:hidden absolute inset-0 opacity-40 pointer-events-none" 
          style={{
@@ -1736,6 +1749,7 @@ const updateTransaction = useCallback(async (updatedData) => {
         <div className="flex space-x-2 mb-6 overflow-x-auto">
           {members.map(member => {
             const memberColor = memberColors[member.name] || 'bg-gray-500';
+            const memberName = obfuscateData(member.name, false);
             return (
               <button
                 key={member.id}
@@ -1746,8 +1760,8 @@ const updateTransaction = useCallback(async (updatedData) => {
                     : 'bg-white dark:bg-gray-800 text-black dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
                 }`}
               >
-                <span className="font-medium">{member.name}</span>
-                <span className="ml-2 text-sm opacity-75">₱{member.totalBalance.toLocaleString()}</span>
+                <span className="font-medium">{memberName}</span>
+                <span className="ml-2 text-sm opacity-75">₱{obfuscateData(member.totalBalance.toLocaleString())}</span>
               </button>
             );
           })}

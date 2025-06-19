@@ -7,8 +7,7 @@ import DarkModeToggle from '@/components/DarkModeToggle'
 import Image from 'next/image';
 import Link from 'next/link';
 
-export default function Navbar() {
-  const [user, setUser] = useState<User | null>(null);
+export default function Navbar({ user, setUser, allowedEmails }) {
   const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
@@ -28,7 +27,14 @@ export default function Navbar() {
   const handleLogin = async () => {
     try {
       const provider = new GoogleAuthProvider();
-      await signInWithPopup(auth, provider);
+      const result = await signInWithPopup(auth, provider);
+      if (allowedEmails.includes(result.user.email)) {
+        setUser(result.user);
+      } else {
+        await signOut(auth);
+        setUser(null);
+        alert('Access denied. Your email is not authorized.');
+      }
     } catch (error) {
       console.error('Error signing in with Google:', error);
     }
@@ -38,7 +44,6 @@ export default function Navbar() {
     try {
       await signOut(auth);
       setUser(null);
-      console.log('Logged out successfully');
     } catch (error) {
       console.error('Error signing out:', error);
     }
