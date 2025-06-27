@@ -1696,9 +1696,9 @@ const updateTransaction = useCallback(async (updatedData) => {
           }}
     /> */}
     <div className="relative z-10">
-  <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-    {/* Tab Navigation */}
-    <div className="flex space-x-1 mb-6">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Tab Navigation */}
+      <div className="flex space-x-1 mb-6">
       {[
         { id: 'overview', label: 'Overview', icon: TrendingUp },
         { id: 'wallets', label: 'Wallets', icon: Wallet },
@@ -1708,20 +1708,24 @@ const updateTransaction = useCallback(async (updatedData) => {
         const Icon = tab.icon;
         const isActive = activeTab === tab.id;
         const isDisabled = tab.disabled || false;
-        if (tab.id === "investments") {console.error(`Adding ${tab.id} because NODE_ENV = ${process.env.NEXT_PUBLIC_WORKING_ENV}`);}
+        
+        if (tab.id === "investments") {
+          console.error(`Adding ${tab.id} because NODE_ENV = ${process.env.NEXT_PUBLIC_WORKING_ENV}`);
+        }
         
         return (
           <button
             key={tab.id}
             onClick={() => !isDisabled && setActiveTab(tab.id)}
             disabled={isDisabled}
-            className={`flex items-center space-x-2 px-4 py-2 rounded-full transition-colors ${
+            className={`flex items-center justify-center md:justify-start space-x-2 px-3 md:px-4 py-2 rounded-full transition-colors flex-1 md:flex-none ${
               isActive
                 ? 'bg-blue-500 text-white'
                 : isDisabled
                   ? 'bg-gray-100 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
                   : 'bg-white dark:bg-gray-800 text-blue hover:bg-gray-50 dark:hover:bg-gray-700'
             }`}
+            aria-label={tab.label}
           >
             <Icon
               size={16}
@@ -1733,7 +1737,7 @@ const updateTransaction = useCallback(async (updatedData) => {
                     : 'text-black dark:text-white'
               }`}
             />
-            <span className={`${
+            <span className={`hidden md:inline ${
               isActive ? 'text-white' : 
               isDisabled ? 'text-gray-400 dark:text-gray-500' : 
               'text-black dark:text-white'
@@ -1745,27 +1749,50 @@ const updateTransaction = useCallback(async (updatedData) => {
       })}
     </div>
 
-        {/* Member Filter */}
-        <div className="flex space-x-2 mb-6 overflow-x-auto">
-          {members.map(member => {
-            const memberColor = memberColors[member.name] || 'bg-gray-500';
-            const memberName = obfuscateData(member.name, false);
-            return (
-              <button
-                key={member.id}
-                onClick={() => handleMemberToggle(member.name)}
-                className={`flex-shrink-0 px-4 py-2 rounded-full border transition-colors ${
-                  selectedMembers.includes(member.name)
-                    ? `${memberColor} text-white border-transparent`
-                    : 'bg-white dark:bg-gray-800 text-black dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                }`}
-              >
-                <span className="font-medium">{memberName}</span>
-                <span className="ml-2 text-sm opacity-75">₱{obfuscateData(member.totalBalance.toLocaleString())}</span>
-              </button>
-            );
-          })}
-        </div>
+        {/* Member Filter - Perfectly Fitted Responsive Design */}
+<div className="flex mb-6 w-full">
+  <div className="flex flex-1 gap-1 px-1 md:gap-2 md:px-0 overflow-x-auto">
+    {members.map(member => {
+      const memberColor = memberColors[member.name] || 'bg-gray-500';
+      const memberName = obfuscateData(member.name, false);
+      return (
+        <button
+          key={member.id}
+          onClick={() => handleMemberToggle(member.name)}
+          className={`min-w-[20%] transition-colors border
+            /* Mobile */
+            flex-1 px-0 py-1.5 rounded-md
+            /* Desktop */
+            md:min-w-0 md:px-4 md:py-2 md:rounded-full
+            /* Shared */
+            ${
+              selectedMembers.includes(member.name)
+                ? `${memberColor} text-white border-transparent`
+                : 'bg-white dark:bg-gray-800 text-black dark:text-gray-100 border-gray-200 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
+            }`}
+        >
+          {/* Mobile Layout */}
+          <div className="flex flex-col items-center w-full overflow-hidden md:hidden">
+            <span className="font-medium text-xs whitespace-nowrap overflow-hidden text-ellipsis w-full text-center px-1">
+              {memberName}
+            </span>
+            <span className="text-[10px] opacity-75 mt-px">
+              ₱{obfuscateData(member.totalBalance.toLocaleString())}
+            </span>
+          </div>
+
+          {/* Desktop Layout */}
+          <div className="hidden md:flex items-center">
+            <span className="font-medium">{memberName}</span>
+            <span className="ml-2 text-sm opacity-75">
+              ₱{obfuscateData(member.totalBalance.toLocaleString())}
+            </span>
+          </div>
+        </button>
+      );
+    })}
+  </div>
+</div>
 
         {/* Content */}
         {renderContent()}
